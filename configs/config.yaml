@@ -1,0 +1,29 @@
+# Runtime model routing (agentodo.md §3). Never hard-coded.
+backends:
+  lmstudio:
+    base_url: "http://127.0.0.1:1234/v1"
+    api_key_env: LMSTUDIO_API_KEY
+    models:
+      ling_tiny: ling-3.0-tiny
+      gemma_qat: gemma-4-12b-it-qat
+      gemma_e4b: gemma-4-e4b-uncensored-hauhaucs-aggressive
+      qwen_small: qwen3.5-4b
+      qwen_medium: qwen3.5-9b
+      embeddings: text-embedding-nomic-embed-text-v1.5
+
+routing:
+  simple_chat: gemma_qat
+  classification: gemma_qat
+  entity_extraction: gemma_qat
+  simple_rag: gemma_qat
+  complex_rag: ling_tiny
+  source_comparison: ling_tiny
+  difficult_reasoning: ling_tiny
+  content_generation: ling_tiny
+  tool_calling: ling_tiny
+  mobile_default: gemma_qat
+
+defaults:
+  backend: lmstudio
+  # Fallback role if a routing key is missing.
+  model_role: ling_tiny

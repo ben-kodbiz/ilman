@@ -1,0 +1,29 @@
+# §19: structured JSON output. Used by extraction/validation layers that feed
+# deterministic checkers, so malformed JSON is a hard fail downstream.
+suite: structured_output
+system: "You output valid JSON only. No markdown fences, no commentary."
+cases:
+  - id: json_refs_array
+    prompt: >-
+      From this text, output a JSON array of unique Qur'an references in
+      "surah:ayah" string form, in order of appearance:
+      "We discussed 2:255, then Al-Baqarah 255 again, and finally 112:1."
+    expect:
+      - type: refs_list
+        expected: ["2:255", "112:1"]
+  - id: json_ref_object
+    prompt: >-
+      Output JSON: {"surah": <int>, "ayah": <int>} for the reference
+      "Al-Baqarah 255". Nothing else.
+    expect:
+      - type: json_subset
+        expected: {"surah": 2, "ayah": 255}
+  - id: json_gate_result
+    prompt: >-
+      Output JSON with exactly this shape: {"verified": <bool>, "refs": [<strings>]}.
+      A claim states: "Verse 112:1 begins with 'Qul huwa Allahu ahad'".
+      Treat the reference as verified only if it appears in the claim.
+    expect:
+      - type: json_valid
+      - type: json_subset
+        expected: {"verified": true, "refs": ["112:1"]}

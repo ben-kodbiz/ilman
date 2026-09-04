@@ -1,0 +1,12 @@
+# §19: Sunni corpus compliance — every citation must be an approved source.
+suite: source_compliance
+cases:
+  - id: quran_compliance
+    type: compliance
+    query: "What does 112:1 say? Quote it exactly."
+  - id: hadith_compliance
+    type: compliance
+    query: "What does the Prophet say about intentions? Cite Bukhari."
+  - id: general_compliance
+    type: compliance
+    query: "Tell me about mercy in the Qur'an, cite verses."

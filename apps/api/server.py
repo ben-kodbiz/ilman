@@ -1,0 +1,257 @@
+"""HTTP API for the study assistant (agentodo.md §23 Phase A, §26 Phase 8 seed).
+
+Serves ONLY registry-backed endpoints: search, deterministic ayah lookup,
+source metadata, and the grounded answer pipeline. Every response carries
+provenance (citation_id + source_id + tier). The server never forwards raw
+model output without citation validation.
+
+Local-first: binds 127.0.0.1 by default, no telemetry, no cloud calls.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from agent.core.agent import AgentOrchestrator
+from agent.core.config import load_config
+from agent.core.model import ModelRouter
+from agent.memory.store import MemoryStore
+from agent.policy.source_policy import SourcePolicy, SourceRegistry
+from agent.tools.layer import TOOL_SCHEMAS, ToolLayer, execute_tool
+from agent.validators.pipeline import UNVERIFIABLE_NOTICE, ResponsePipeline
+from ingestion.hadith_ingest import KUTUB_AL_SITTAH, HadithStore
+from ingestion.quran_ingest import DEFAULT_DB, QuranStore
+from ingestion.tafsir_en_ingest import TafsirEnStore
+from ingestion.tafsir_ingest import TafsirStore
+from retrieval.hybrid import RetrievalOrchestrator
+from retrieval.vector_store import VectorStore
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+WEB_DIR = REPO_ROOT / "apps" / "web"
+
+app = FastAPI(title="Huurs study API", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+STORE = QuranStore()
+if not Path(DEFAULT_DB).exists() or STORE.ayah_count_total() == 0:
+    raise RuntimeError(
+        "knowledge DB not ingested — run: uv run python -c "
+        "'from ingestion.quran_ingest import QuranIngestor; QuranIngestor().ingest()'"
+    )
+POLICY = SourcePolicy(SourceRegistry.load())
+HADITH_STORE = HadithStore()
+try:
+    HADITH_COUNT = HADITH_STORE.hadith_count()
+except Exception:
+    HADITH_COUNT = 0
+TAFSIR_STORE = TafsirStore()
+try:
+    TAFSIR_COUNT = TAFSIR_STORE.tafsir_count()
+except Exception:
+    TAFSIR_COUNT = 0
+TAFSIR_EN_STORE = TafsirEnStore()
+try:
+    TAFSIR_EN_COUNT = TAFSIR_EN_STORE.chunk_count()
+except Exception:
+    TAFSIR_EN_COUNT = 0
+try:
+    VECTOR_STORE = VectorStore()
+    _ = VECTOR_STORE.size  # loads cache; 0 when missing
+except Exception:
+    VECTOR_STORE = None
+ORCHESTRATOR = RetrievalOrchestrator(
+    STORE,
+    hadith_store=HADITH_STORE if HADITH_COUNT else None,
+    tafsir_store=TAFSIR_STORE if TAFSIR_COUNT else None,
+    tafsir_en_store=TAFSIR_EN_STORE if TAFSIR_EN_COUNT else None,
+    vector_store=VECTOR_STORE if (VECTOR_STORE and VECTOR_STORE.size) else None,
+)
+MEMORY = MemoryStore()
+TOOLS = ToolLayer(
+    POLICY, store=STORE,
+    hadith_store=HADITH_STORE if HADITH_COUNT else None,
+    memory=MEMORY,
+)
+try:
+    ROUTER = ModelRouter(load_config())
+    PIPELINE = ResponsePipeline(ROUTER)
+    AGENT = AgentOrchestrator(ROUTER, ORCHESTRATOR, TOOLS, memory=MEMORY)
+except Exception:
+    ROUTER = None
+    PIPELINE = None  # model backend absent: search still works, answers refuse
+    AGENT = None
+
+
+class AnswerRequest(BaseModel):
+    question: str
+    task_class: str = "complex_rag"
+    limit: int = 6
+    mode: str = "agent"  # "agent" (tool loop) or "pipeline" (single-shot)
+
+
+class ToolCallRequest(BaseModel):
+    name: str
+    arguments: dict
+
+
+@app.get("/api/v1/health")
+def health() -> dict:
+    return {
+        "status": "ok",
+        "ayahs": STORE.ayah_count_total(),
+        "hadiths": HADITH_COUNT,
+        "tafsir_entries": TAFSIR_COUNT,
+        "classic_tafsir_chunks": TAFSIR_EN_COUNT,
+        "vector_index_size": VECTOR_STORE.size if VECTOR_STORE else 0,
+        "answer_backend": "model" if PIPELINE else "unavailable",
+    }
+
+
+@app.get("/api/v1/ayah/{surah}/{ayah}")
+def get_ayah(surah: int, ayah: int, lang: str = "en") -> dict:
+    row = STORE.get_ayah(surah, ayah, lang=lang if STORE.translation_count(lang) else None)
+    if row is None:
+        raise HTTPException(404, f"ayah {surah}:{ayah} not found")
+    return row
+
+
+@app.get("/api/v1/ayah")
+def get_ayah_by_reference(ref: str) -> dict:
+    row = STORE.get_by_reference(ref)
+    if row is None:
+        raise HTTPException(404, f"could not resolve reference '{ref}'")
+    return row
+
+
+@app.get("/api/v1/search")
+def search(q: str, limit: int = 8) -> dict:
+    passages = ORCHESTRATOR.search(q, limit=limit)
+    return {
+        "query": q,
+        "results": [
+            {
+                "citation_id": p.citation_id,
+                "surah": p.surah,
+                "ayah": p.ayah,
+                "arabic": p.arabic,
+                "translation": p.translation,
+                "source_id": p.source_id,
+                "tier": p.tier,
+                "collection": p.collection or None,
+                "hadithnumber": p.hadithnumber,
+                "grades": p.grades if p.citation_id.startswith("hadith:") else None,
+            }
+            for p in passages
+        ],
+    }
+
+
+@app.get("/api/v1/hadith/collections")
+def hadith_collections() -> dict:
+    return {"collections": HADITH_STORE.collections()}
+
+
+@app.get("/api/v1/hadith/{collection}/{hadith_number}")
+def get_hadith(collection: str, hadith_number: int) -> dict:
+    if collection not in KUTUB_AL_SITTAH:
+        raise HTTPException(404, f"unknown collection '{collection}'")
+    row = HADITH_STORE.get_hadith(collection, hadith_number)
+    if row is None:
+        raise HTTPException(404, f"hadith {collection}:{hadith_number} not found")
+    return row
+
+
+@app.get("/api/v1/hadith/search")
+def hadith_search(q: str, collection: str | None = None, limit: int = 12) -> dict:
+    results = HADITH_STORE.search_fts(q, source_id=collection, limit=limit)
+    return {"query": q, "results": results}
+
+
+@app.get("/api/v1/tafsir/{surah}/{ayah}")
+def get_tafsir(surah: int, ayah: int) -> dict:
+    row = TAFSIR_STORE.get_tafsir(surah, ayah)
+    if row is None:
+        raise HTTPException(404, f"no tafsir for {surah}:{ayah}")
+    return row
+
+
+@app.get("/api/v1/tafsir/search")
+def tafsir_search(q: str, limit: int = 10) -> dict:
+    return {"query": q, "results": TAFSIR_STORE.search_fts(q, limit=limit)}
+
+
+@app.get("/api/v1/tafsir/classic/{surah}/{ayah}")
+def classic_tafsir_ayah(surah: int, ayah: int) -> dict:
+    """All classic English tafsir commentary on one ayah (Sa'di, Ibn Kathir, Qurtubi)."""
+    chunks = TAFSIR_EN_STORE.get_for_ayah(surah, ayah)
+    return {"surah": surah, "ayah": ayah, "commentary": chunks}
+
+
+@app.get("/api/v1/tafsir/classic/search")
+def classic_tafsir_search(q: str, source_id: str | None = None, limit: int = 10) -> dict:
+    return {"query": q, "results": TAFSIR_EN_STORE.search_fts(q, source_id=source_id, limit=limit)}
+
+
+@app.get("/api/v1/sources/{source_id}")
+def source_metadata(source_id: str) -> dict:
+    result = TOOLS.get_source_metadata(source_id)
+    if not result.ok:
+        raise HTTPException(404, result.error)
+    return result.data
+
+
+@app.get("/api/v1/tools")
+def tools() -> list[dict]:
+    return TOOL_SCHEMAS
+
+
+@app.post("/api/v1/tools/call")
+def call_tool(req: ToolCallRequest) -> dict:
+    result = execute_tool(TOOLS, req.name, req.arguments)
+    if not result.ok:
+        return {"ok": False, "error": result.error}
+    return {"ok": True, "data": result.data}
+
+
+@app.post("/api/v1/answer")
+def answer(req: AnswerRequest) -> dict:
+    if req.mode == "agent":
+        if AGENT is None:
+            raise HTTPException(503, "model backend unavailable; search is still usable")
+        result = AGENT.answer(req.question, limit=req.limit)
+        return result.to_dict()
+    if PIPELINE is None:
+        raise HTTPException(503, "model backend unavailable; search is still usable")
+    result = PIPELINE.answer(req.question, ORCHESTRATOR,
+                              task_class=req.task_class, limit=req.limit)
+    return result.to_dict()
+
+
+@app.get("/api/v1/history")
+def history(limit: int = 10) -> dict:
+    return {"history": MEMORY.history(limit), "notes": MEMORY.notes(limit)}
+
+
+@app.get("/api/v1/unverifiable-notice")
+def unverifiable_notice() -> dict:
+    """Exposed so clients render the exact §12 refusal text, not their own."""
+    return {"notice": UNVERIFIABLE_NOTICE}
+
+
+if WEB_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=WEB_DIR), name="web")
+
+    @app.get("/", include_in_schema=False)
+    def index() -> FileResponse:
+        return FileResponse(WEB_DIR / "index.html")

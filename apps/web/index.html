@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Huurs — Qur'an Study</title>
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #f6f4ef; color: #1c1b18; display: flex; justify-content: center;
+  }
+  main { width: 100%; max-width: 720px; padding: 1rem; }
+  h1 { font-size: 1.25rem; margin: 0.5rem 0 0.25rem; }
+  .sub { color: #6b675e; font-size: 0.85rem; margin-bottom: 1rem; }
+  .card {
+    background: #fff; border: 1px solid #e3ddd2; border-radius: 12px;
+    padding: 1rem; margin-bottom: 0.75rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .arabic { font-size: 1.45rem; line-height: 2.4; text-align: right; direction: rtl; }
+  .translation { font-size: 0.95rem; margin-top: 0.5rem; color: #454138; }
+  .ref { font-size: 0.8rem; color: #7a5c2e; margin-top: 0.4rem; }
+  .badge { display: inline-block; font-size: 0.7rem; padding: 0.1rem 0.5rem;
+    border-radius: 999px; background: #efe9dc; color: #5b4a26; margin-left: 0.4rem; }
+  form { display: flex; gap: 0.5rem; margin: 0.75rem 0 1rem; }
+  input[type=search] {
+    flex: 1; padding: 0.7rem 0.9rem; border: 1px solid #d8d1c3; border-radius: 10px;
+    font-size: 1rem; background: #fff; color: inherit;
+  }
+  button {
+    padding: 0.7rem 1.1rem; border: 0; border-radius: 10px; cursor: pointer;
+    background: #2e6b4f; color: #fff; font-size: 0.95rem;
+  }
+  .refusal { border-color: #c0392b; background: #fdf3f2; color: #7b241c; }
+  .meta { font-size: 0.75rem; color: #8a8578; margin-top: 0.5rem; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #191713; color: #eae6dd; }
+    .card { background: #211f1a; border-color: #34302a; }
+    input[type=search] { background: #211f1a; border-color: #3a352d; }
+    .badge { background: #3a352d; color: #d9cfb4; }
+    .refusal { background: #2c1a17; }
+    .translation { color: #c9c3b6; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Qur'an Study</h1>
+  <div class="sub">Source-grounded · citations verified · answers only from the approved corpus</div>
+
+  <form id="ask">
+    <input type="search" id="q" placeholder="Arabic text, a reference like 2:255, or a question…" autofocus>
+    <button type="submit">Ask</button>
+  </form>
+
+  <div id="mode" class="sub"></div>
+  <div id="results"></div>
+</main>
+
+<script>
+const API = location.protocol === "file:" ? "http://127.0.0.1:8017" : "";
+const NOTICE_URL = API + "/api/v1/unverifiable-notice";
+let NOTICE = "I could not verify this from the approved source corpus.";
+
+async function loadNotice() {
+  try {
+    const r = await fetch(NOTICE_URL);
+    NOTICE = (await r.json()).notice;
+  } catch {}
+}
+loadNotice();
+
+const $results = document.getElementById("results");
+const $mode = document.getElementById("mode");
+
+function passageCard(p) {
+  const translation = p.translation
+    ? `<div class="translation">${p.translation}</div>` : "";
+  return `<div class="card">
+    <div class="arabic">${p.arabic}</div>
+    ${translation}
+    <div class="ref">Qur'an ${p.surah}:${p.ayah}
+      <span class="badge">${p.citation_id}</span>
+      <span class="badge">TIER ${p.tier}</span>
+      <span class="badge">${p.source_id}</span>
+    </div>
+  </div>`;
+}
+
+async function ask(question) {
+  $mode.textContent = "Asking with grounded evidence…";
+  try {
+    const r = await fetch(API + "/api/v1/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, task_class: "complex_rag" }),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    if (d.refused || !d.verified) {
+      $mode.textContent = "Not verifiable from the corpus:";
+      $results.innerHTML = `<div class="card refusal">${NOTICE}</div>`;
+      return;
+    }
+    $mode.textContent = "Answer (every citation checked against retrieved evidence):";
+    const evidence = (d.evidence || []).map(passageCard).join("");
+    $results.innerHTML = `<div class="card">${d.answer}
+      <div class="meta">citations: ${d.citations.join(", ") || "—"}</div>
+    </div>` + evidence;
+  } catch (e) {
+    $mode.textContent = "";
+    $results.innerHTML = `<div class="card refusal">API unavailable (${e}). Is the server running?</div>`;
+  }
+}
+
+async function search(q) {
+  $mode.textContent = "Corpus search:";
+  const r = await fetch(API + `/api/v1/search?q=${encodeURIComponent(q)}`);
+  const d = await r.json();
+  $results.innerHTML = d.results.map(passageCard).join("") ||
+    '<div class="card refusal">No passages found.</div>';
+}
+
+document.getElementById("ask").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = document.getElementById("q").value.trim();
+  if (!q) return;
+  $results.innerHTML = "";
+  // cheap heuristic: a question mark or latin question words -> grounded answer
+  const isQuestion = /[?]|^(what|who|why|how|when|where|which|explain|tell)\b/i.test(q);
+  if (isQuestion) await ask(q);
+  else await search(q);
+});
+</script>
+</body>
+</html>

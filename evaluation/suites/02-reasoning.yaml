@@ -1,0 +1,34 @@
+# §2.1: thinking=true territory: multi-step reasoning, syllogism, structured
+# comparison. Pass = correct final answer; reasoning overhead is measured, not
+# judged (except unanswerable traps which must return UNANSWERABLE, §20).
+suite: reasoning
+cases:
+  - id: syllogism
+    prompt: >-
+      All roses are flowers. Some flowers fade quickly. Therefore, do all
+      roses fade quickly? Answer strictly YES or NO, then one sentence why.
+    expect:
+      - type: contains
+        expected: "NO"
+  - id: arithmetic_pages
+    prompt: >-
+      A student reads 14 pages a day. She must finish a 3-section book of 14,
+      14, and 14 pages, sections read in order. On which day does she finish?
+      Answer with 'Day N' only.
+    expect:
+      - type: contains
+        expected: "Day 3"
+  - id: unanswerable_captain
+    prompt: >-
+      A boat's crew has 3 sheep and 2 goats aboard as cargo. How old is the
+      captain? If this cannot be determined, reply exactly: UNANSWERABLE
+    expect:
+      - type: contains
+        expected: "UNANSWERABLE"
+  - id: sort_surah_numbers
+    prompt: >-
+      Sort these surah numbers ascending, output as comma-separated integers
+      only: 114, 1, 36, 2
+    expect:
+      - type: exact
+        expected: "1, 2, 36, 114"

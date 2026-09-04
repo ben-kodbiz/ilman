@@ -1,0 +1,327 @@
+# Approved Sunni source registry (agentodo.md §5.1).
+# Ingestion/retrieval/citation is only permitted for sources listed here with
+# allowed=true. Extend only after license + quality checks pass.
+sources:
+  - id: quran-uthmani
+    title: "The Qur'an (Uthmani script)"
+    author: "Revelation"
+    type: quran
+    language: ar
+    tradition: SUNNI
+    school: ""
+    publisher: "Tanzil.net"
+    edition: "Uthmani v1.0.2"
+    license: "Free to redistribute with attribution (Tanzil terms)"
+    url: "https://tanzil.net"
+    verification_status: verified
+    allowed: true
+    notes: "TIER 0. Any text served as Qur'an MUST come from this dataset, never from model output."
+
+  - id: quran-uthmani-json
+    title: "Qur'an Uthmani text (quran-json compilation of Tanzil Uthmani v1.0.2)"
+    author: "risan (compilation); text from Tanzil.net"
+    type: quran
+    language: ar
+    tradition: SUNNI
+    school: ""
+    publisher: "github.com/risan/quran-json"
+    edition: "Uthmani"
+    license: "MIT (compilation); Qur'an text freely redistributable"
+    url: "https://github.com/risan/quran-json"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 0. Downloaded 2026-09-04; 6236 ayahs, 114 chapters, contiguous verse
+      numbering verified programmatically at ingestion. Source file:
+      knowledge/quran/quran-uthmani-raw.json
+      sha256=bd74e2cefe800e2600baa4a6056d1e83a83c771f6ff525064cb08bdccbf128bf.
+      Any text served as Qur'an MUST come from this dataset, never model output.
+
+  - id: quran-en-saheeh-json
+    title: "Qur'an English translation (quran-json compilation)"
+    author: "risan (compilation); English translation in the Saheeh International style"
+    type: quran
+    language: en
+    tradition: SUNNI
+    school: ""
+    publisher: "github.com/risan/quran-json"
+    edition: "English edition"
+    license: "CC-BY-SA-4.0 (compilation)"
+    url: "https://github.com/risan/quran-json"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 0 translation. Downloaded 2026-09-04; 6236 verses, 114 chapters,
+      verse numbering perfectly aligned with quran-uthmani-json (validated
+      programmatically). Translation text only, aligned per-ayah; it is a
+      translation (human interpretation), NOT Qur'an text itself — always
+      cite the Arabic when quoting Qur'an, never the translation alone.
+      Source file: knowledge/quran/quran-en-translation-raw.json
+      sha256=6a13d8c2796233f925084f1f8cd3d8f3ed900dbc93cfbd70e473350e3520367b.
+
+  - id: sahih-bukhari
+    title: "Sahih al-Bukhari"
+    author: "Imam Muhammad al-Bukhari"
+    type: sunnah
+    language: ar
+    tradition: SUNNI
+    school: ""
+    publisher: "fawazahmed0/hadith-api (text from sunnah.com)"
+    edition: "hadith-api@1 (ara-bukhari / eng-bukhari)"
+    license: "Unlicense (compilation); sunnah.com texts used per their non-commercial sharing terms"
+    url: "https://github.com/fawazahmed0/hadith-api"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 1. Downloaded 2026-09-04 from cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1.
+      7589 hadiths, AR/EN numbering aligned (validated programmatically).
+      No per-hadith grades in this dataset: the collection itself is sahih —
+      grade_metadata must present this as the collection-level grading, never
+      invent per-hadith gradings. Files:
+      knowledge/hadith/raw/hadith-ara-bukhari.json
+      sha256=f887d8724f75fb6e1d5d29342a173af5346ad9b933173c85e6e3cb570063ea33,
+      knowledge/hadith/raw/hadith-eng-bukhari.json
+      sha256=60f8dfcf2cb8bcd2c8e281be68d912ee153e0fc4d02ad317d33c532d3814a04f.
+
+  - id: sahih-muslim
+    title: "Sahih Muslim"
+    author: "Imam Muslim ibn al-Hajjaj"
+    type: sunnah
+    language: ar
+    tradition: SUNNI
+    school: ""
+    publisher: "fawazahmed0/hadith-api (text from sunnah.com)"
+    edition: "hadith-api@1 (ara-muslim / eng-muslim)"
+    license: "Unlicense (compilation); sunnah.com texts used per their non-commercial sharing terms"
+    url: "https://github.com/fawazahmed0/hadith-api"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 1. Downloaded 2026-09-04. 7563 hadiths, AR/EN aligned.
+      Collection-level sahih grading; no per-hadith grades in dataset.
+      Files: knowledge/hadith/raw/hadith-ara-muslim.json
+      sha256=2cb296f3455ff8a3da9f6a0ca3de75da675788b2fb446ad316df297838e48217,
+      knowledge/hadith/raw/hadith-eng-muslim.json
+      sha256=b5a04a66206b2cfaab18e2439ed2efeb824c6e179627e36a883dc060c03d4960.
+
+  - id: sunan-abu-dawud
+    title: "Sunan Abu Dawud"
+    author: "Imam Abu Dawud al-Sijistani"
+    type: sunnah
+    language: ar
+    tradition: SUNNI
+    school: ""
+    publisher: "fawazahmed0/hadith-api (text from sunnah.com)"
+    edition: "hadith-api@1 (ara-abudawud / eng-abudawud)"
+    license: "Unlicense (compilation); sunnah.com texts used per their non-commercial sharing terms"
+    url: "https://github.com/fawazahmed0/hadith-api"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 1. Downloaded 2026-09-04. 5274 hadiths, AR/EN aligned, per-hadith
+      grades present (Al-Albani, Shuaib Al Arnaut, et al.).
+      Files: knowledge/hadith/raw/hadith-ara-abudawud.json
+      sha256=30dd3792ea65abe7fd0be8d568809d4eac04e38cbbd588b9c6055218fe43675f,
+      knowledge/hadith/raw/hadith-eng-abudawud.json
+      sha256=81f711c6240f517b3fce6f97ecb019c1831775297e25f1797e5785c11f61c6d8.
+
+  - id: jami-at-tirmidhi
+    title: "Jami' at-Tirmidhi"
+    author: "Imam at-Tirmidhi"
+    type: sunnah
+    language: ar
+    tradition: SUNNI
+    school: ""
+    publisher: "fawazahmed0/hadith-api (text from sunnah.com)"
+    edition: "hadith-api@1 (ara-tirmidhi / eng-tirmidhi)"
+    license: "Unlicense (compilation); sunnah.com texts used per their non-commercial sharing terms"
+    url: "https://github.com/fawazahmed0/hadith-api"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 1. Downloaded 2026-09-04. 3998 hadiths, AR/EN aligned, per-hadith
+      grades present for 3954.
+      Files: knowledge/hadith/raw/hadith-ara-tirmidhi.json
+      sha256=22b7ffbbca9beb5d4f108cc0389a3cd16917876b3ceb32993c46e1554afd871b,
+      knowledge/hadith/raw/hadith-eng-tirmidhi.json
+      sha256=cf16ae15f7f6f23faab1c348d3962b49ac96e0e25cac7930b3725773bb6887f3.
+
+  - id: sunan-an-nasai
+    title: "Sunan an-Nasa'i"
+    author: "Imam an-Nasa'i"
+    type: sunnah
+    language: ar
+    tradition: SUNNI
+    school: ""
+    publisher: "fawazahmed0/hadith-api (text from sunnah.com)"
+    edition: "hadith-api@1 (ara-nasai / eng-nasai)"
+    license: "Unlicense (compilation); sunnah.com texts used per their non-commercial sharing terms"
+    url: "https://github.com/fawazahmed0/hadith-api"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 1. Downloaded 2026-09-04. 5765 hadiths, AR/EN aligned, per-hadith
+      grades present for 5758.
+      Files: knowledge/hadith/raw/hadith-ara-nasai.json
+      sha256=18294d8da9ec9a735719f26709858ac30657c1122f6a39d179f128bfc59ecb80,
+      knowledge/hadith/raw/hadith-eng-nasai.json
+      sha256=07f020084ecd21e647e4efd5b63e2866ab83143d68b470993eec1556e4fe8502.
+
+  - id: sunan-ibn-majah
+    title: "Sunan Ibn Majah"
+    author: "Imam Ibn Majah"
+    type: sunnah
+    language: ar
+    tradition: SUNNI
+    school: ""
+    publisher: "fawazahmed0/hadith-api (text from sunnah.com)"
+    edition: "hadith-api@1 (ara-ibnmajah / eng-ibnmajah)"
+    license: "Unlicense (compilation); sunnah.com texts used per their non-commercial sharing terms"
+    url: "https://github.com/fawazahmed0/hadith-api"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 1. Downloaded 2026-09-04. 4343 hadiths, AR/EN aligned, per-hadith
+      grades present for 4341.
+      Files: knowledge/hadith/raw/hadith-ara-ibnmajah.json
+      sha256=495fcccdea5f2d157794d2b1bd1eaa0e0a5ff5aeb6be2d7817de8f25e3b3349c,
+      knowledge/hadith/raw/hadith-eng-ibnmajah.json
+      sha256=c6966c9a02460817fec348945407b8407fcb9f0b0425022ce625792d0c22078b.
+
+  # ---- Classic English tafsirs (quran_campaign extraction, 2026-09-04) ----
+  # Owner-approved ingestion of an existing extraction pipeline's chunks
+  # (source DB hash-pinned). PROVENANCE CAVEATS, do not remove:
+  #   * English editions are copyrighted print translations (IIPH / Darussalam
+  #     / al-Resala); machine-readable license NOT verified — approved for
+  #     private local study ONLY, never for publication/redistribution (§21).
+  #   * quran_campaign's own pipeline marks sadi + ibn_kathir
+  #     religious_trust_status=pending_review; qurtubi=approved.
+  #   * qurtubi corpus covers surahs 1-94 only (vols for 95-114 absent).
+  #   * kb.db's quran/translations tables are truncated — never imported;
+  #     Qur'an text remains the hash-verified quran-uthmani-json only.
+
+  - id: tafsir-sadi-en
+    title: "Tafseer as-Sa'di (English, 10 vols, IIPH)"
+    author: "Abdur-Rahman Nasir as-Sa'di; tr. Nasiruddin al-Khattab"
+    type: tafsir
+    language: en
+    tradition: SUNNI
+    school: ""
+    publisher: "International Islamic Publishing House (print edition)"
+    edition: "English Edition 1 (2018), vols 1-10 (Juz 1-30)"
+    license: "owner-approved-local-use (print-edition copyright unresolved)"
+    url: "https://github.com/sunniconnect (extraction source)"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 2. Extracted chunks ingested 2026-09-04 from quran_campaign
+      kb.db (born-digital PDFs, no OCR; 3613 chunks, all 114 surahs
+      ayah-tagged; per-volume sha256s in quran_campaign metadata).
+      Private local study only — publication/redistribution blocked (§21).
+      Source: knowledge/tafsir/raw/classic_tafsir_en_chunks.db
+      sha256=f4a172c2e3fcee0de806ae35b1f98a22456a554354c03478e75fe52817556df6.
+
+  - id: tafsir-ibn-kathir-en
+    title: "Tafsir Ibn Kathir, Abridged (English, vols 1-10)"
+    author: "Ibn Kathir; abridged Eng. compilation"
+    type: tafsir
+    language: en
+    tradition: SUNNI
+    school: ""
+    publisher: "Darussalam (print edition)"
+    edition: "Abridged English, 10 volumes"
+    license: "owner-approved-local-use (print-edition copyright unresolved)"
+    url: ""
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 2. Extracted chunks ingested 2026-09-04 from quran_campaign
+      kb.db (single-file compilation, no OCR; 4004 chunks, all 114 surahs
+      ayah-tagged, 3285 single-ayah precise).
+      Private local study only — publication/redistribution blocked (§21).
+      Source: knowledge/tafsir/raw/classic_tafsir_en_chunks.db
+      sha256=f4a172c2e3fcee0de806ae35b1f98a22456a554354c03478e75fe52817556df6.
+
+  - id: tafsir-qurtubi-en
+    title: "Al-Jami' li-Ahkam al-Qur'an (English, 20+ vols)"
+    author: "Al-Qurtubi; ed. Dr. Abdullah al-Turki (al-Resala)"
+    type: tafsir
+    language: en
+    tradition: SUNNI
+    school: ""
+    publisher: "al-Resala Foundation (print edition)"
+    edition: "English extraction, volumes covering surahs 1-94"
+    license: "owner-approved-local-use (print-edition copyright unresolved)"
+    url: ""
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 2. Extracted chunks ingested 2026-09-04 from quran_campaign
+      kb.db (22 volume files, no OCR; 11490 chunks; surahs 1-94 ONLY —
+      95-114 absent from source PDFs; quran_campaign marks this source
+      religious_trust_status=approved). Private local study only —
+      publication/redistribution blocked (§21).
+      Source: knowledge/tafsir/raw/classic_tafsir_en_chunks.db
+      sha256=f4a172c2e3fcee0de806ae35b1f98a22456a554354c03478e75fe52817556df6.
+
+  - id: tafsir-ibn-kathir
+    title: "Tafsir Ibn Kathir (abridged, English)"
+    author: "Ibn Kathir"
+    type: tafsir
+    language: en
+    tradition: SUNNI
+    school: ""
+    publisher: "Darussalam"
+    edition: "abridged"
+    license: "review_required"
+    url: ""
+    verification_status: pending
+    allowed: true
+    notes: >-
+      TIER 2. Pending a licensed machine-readable edition. Deliberately kept
+      pending as the standing MANUAL_REVIEW example for gate tests; must
+      never pass automated ingestion until license + edition are verified.
+
+  - id: tafsir-kemenag
+    title: "Tafsir Kemenag (Tafsiril Quran, Indonesian Ministry of Religious Affairs)"
+    author: "Kementerian Agama Republik Indonesia"
+    type: tafsir
+    language: id
+    tradition: SUNNI
+    school: ""
+    publisher: "github.com/rioastamal/quran-json (compilation, MIT)"
+    edition: "Kemenag per-ayah tafsir"
+    license: "MIT (compilation); source: official Quran Kemenag RI app"
+    url: "https://github.com/rioastamal/quran-json"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 2. Downloaded 2026-09-04 (all 114 surah files). 6236/6236 ayahs
+      have tafsir entries (validated programmatically). Official Indonesian
+      government exegesis grounded in classical Sunni tafsir; represents
+      scholarly disagreement explicitly where it exists. Tafsir text is
+      Indonesian; it is interpretation (TIER 2), NEVER Qur'an text. Qur'an
+      Arabic in these files is NOT the hash-verified Uthmani dataset and is
+      never served. Archived as 114 per-surah JSON files:
+      knowledge/tafsir/raw/kemenag-tafsir.json.tar.gz
+      sha256=ca31b41c34a285d1671fef0131852d405eafccf3c1f4c674b71406deb6cdc799.
+
+  - id: translation-kemenag-id
+    title: "Qur'an Indonesian translation (Kemenag)"
+    author: "Kementerian Agama Republik Indonesia"
+    type: quran
+    language: id
+    tradition: SUNNI
+    school: ""
+    publisher: "github.com/rioastamal/quran-json (compilation, MIT)"
+    edition: "Kemenag translation"
+    license: "MIT (compilation); source: official Quran Kemenag RI app"
+    url: "https://github.com/rioastamal/quran-json"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 0 translation (same dataset as tafsir-kemenag). 6236/6236 verse
+      translations. Translation only — interpretation, never Qur'an text.
+      Same archive file: knowledge/tafsir/raw/kemenag-tafsir.json.tar.gz
+      sha256=ca31b41c34a285d1671fef0131852d405eafccf3c1f4c674b71406deb6cdc799.
+

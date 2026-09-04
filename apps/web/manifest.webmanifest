@@ -1,0 +1,9 @@
+{
+  "name": "Huurs Qur'an Study",
+  "short_name": "Huurs",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f6f4ef",
+  "theme_color": "#2e6b4f",
+  "description": "Local-first, source-grounded Sunni Islamic study assistant"
+}

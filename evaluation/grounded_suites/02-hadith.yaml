@@ -1,0 +1,16 @@
+# §19: Hadith questions — attribution accuracy (§13) and grading honesty.
+suite: hadith_grounded
+cases:
+  - id: intentions_hadith
+    type: grounded_qa
+    query: "What did the Prophet say about deeds and intentions? Cite the hadith."
+    # 2529 and 6953 are valid parallel narrations of the same hadith
+    expect_citations: ["hadith:sahih-bukhari:1", "hadith:sahih-bukhari:2529", "hadith:sahih-bukhari:6953"]
+  - id: bukhari1_direct
+    type: grounded_qa
+    query: "What is hadith no. 1 in Bukhari about? Quote it."
+    expect_citations: ["hadith:sahih-bukhari:1"]
+  - id: abudawud1_grading
+    type: grounded_qa
+    query: "What grading does Abu Dawud hadith 1 have? Cite it."
+    expect_citations: ["hadith:sunan-abu-dawud:1"]

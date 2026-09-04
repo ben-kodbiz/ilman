@@ -1,0 +1,26 @@
+# §11: tool schemas must be honored; §14: no tool call when none is needed.
+# Tools are the ONLY way Qur'an text enters a conversation (§29).
+suite: tool_calling
+cases:
+  - id: get_ayah_call
+    prompt: "Fetch Qur'an verse 2:255 using the get_ayah tool."
+    tools_ref: all
+    expect:
+      - type: tool_call
+        expected:
+          name: get_ayah
+          args: {surah: 2, ayah: 255}
+  - id: verify_ref_alias
+    prompt: "Use the verify_quran_reference tool to check the reference 'Ayat al-Kursi'."
+    tools_ref: all
+    expect:
+      - type: tool_call
+        expected:
+          name: verify_quran_reference
+          args: {reference: "Ayat al-Kursi"}
+  - id: no_tool_needed
+    prompt: "What is the capital of Malaysia? Answer in one word."
+    tools_ref: all
+    expect:
+      - type: contains
+        expected: "Kuala Lumpur"

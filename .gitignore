@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Derived databases + embedding cache — regenerate via ingestion commands
+knowledge/processed/*.db
+knowledge/processed/*.npz
+
+# Classic English tafsir source DB (467MB) — PRIVATE LOCAL STUDY ONLY (§21):
+# print-edition copyright unresolved; must never be published or redistributed.
+# Its derived chunks live in knowledge.db (also excluded).
+knowledge/tafsir/raw/classic_tafsir_en_chunks.db
+
+# Evaluation run artifacts (regenerable; contain corpus text excerpts)
+evaluation/results/
+
+# OS/editor
+.DS_Store
+*.swp

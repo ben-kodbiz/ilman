@@ -1,0 +1,19 @@
+# §19: Qur'an questions with deterministic expected citations.
+suite: quran_grounded
+cases:
+  - id: ayat_kursi_content
+    type: grounded_qa
+    query: "What does Ayat al-Kursi say about Allah? Cite the verse."
+    expect_citations: ["quran:2:255"]
+  - id: ikhlas_oneness
+    type: grounded_qa
+    query: "What does Surah 112 say about Allah being One? Cite it."
+    expect_citations: ["quran:112:1", "quran:112:2"]
+  - id: fatihah_opening
+    type: grounded_qa
+    query: "How does the Qur'an begin? Quote the first verse with its reference."
+    expect_citations: ["quran:1:1"]
+  - id: seeking_refuge_ruler
+    type: grounded_qa
+    query: "According to 2:255, does anything escape Allah's knowledge? Cite the verse."
+    expect_citations: ["quran:2:255"]

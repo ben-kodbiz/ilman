@@ -1,0 +1,25 @@
+# Excluded-source registry (agentodo.md §5.3).
+# Corpus-control mechanism, not commentary. Entries here are never ingested,
+# retrieved, cited, embedded, trained on, or evaluated with.
+sources:
+  - id: web-uncategorized-fatwa-compilation
+    title: "Uncategorized internet fatwa compilation"
+    author: "unknown"
+    type: contemporary
+    language: mixed
+    tradition: UNKNOWN
+    license: unknown
+    verification_status: rejected
+    allowed: false
+    reason: "No verifiable author, chain, or publisher; cannot be attributed safely."
+
+  - id: social-media-dawa-snippets
+    title: "Social media da'wah snippet collection"
+    author: "various anonymous accounts"
+    type: contemporary
+    language: mixed
+    tradition: UNKNOWN
+    license: unknown
+    verification_status: rejected
+    allowed: false
+    reason: "Unverified social-media posts must never be ground truth (§16)."

@@ -1,0 +1,23 @@
+# §2.1: thinking=false for routine requests. A trivial echo task; pass = the
+# model answers directly without reasoning overhead. Also validates that
+# max_tokens is not burned on hidden reasoning.
+suite: routine_speed
+system: "Answer directly and concisely."
+cases:
+  - id: echo_ok
+    prompt: "Reply with exactly: OK"
+    expect:
+      - type: exact
+        expected: "OK"
+      - type: contains
+        expected: "OK"
+  - id: translate_idiom_ms
+    prompt: "Translate to Malay, one line only, no explanation: 'Knowledge is better than wealth.'"
+    expect:
+      - type: contains_any
+        expected: ["ilmu", "pengetahuan"]
+  - id: date_math
+    prompt: "Today is Friday. What day of the week will it be in 61 days? Answer with the weekday name only."
+    expect:
+      - type: contains
+        expected: "Wednesday"

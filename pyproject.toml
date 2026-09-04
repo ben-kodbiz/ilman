@@ -1,0 +1,28 @@
+[project]
+name = "huurs"
+version = "0.1.0"
+description = "Local-first, source-grounded Sunni Islamic study and content assistant"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "PyYAML>=6.0",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.52.4",
+    "numpy>=2.4.6",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
