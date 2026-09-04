@@ -20,6 +20,7 @@ memory.
 | 3 — hybrid retrieval (reference + Arabic/translation/hadith/tafsir FTS + vector leg, RRF, source filter) | done |
 | 4 — Agent: intent router, memory (§15), tool-calling loop, repair rounds | done |
 | 5 — Grounded evaluation suite + 4-model regression baseline | done |
+| Companion enhancement (fix_me.md) — safety routing, intent, state, memory controls, eval | done |
 | 8 — API server + web client (PWA shell) | seed done |
 
 Hadith corpus: all six Kutub al-Sittah collections ingested from the
@@ -55,6 +56,26 @@ comforting evidence. Known remaining: Bukhari-1 grading-misattribution probe
 
 The loaded third-party E4B variant is disqualified for
 religious answers (invented grading, 0% refusal) — use official checkpoints.
+
+## Companion mode
+
+`POST /api/v1/companion` — the context-aware companion (fix_me.md):
+empathy-first responses, conversation modes (qa/study/companion/reflection/
+dua/crisis) shown in the UI, short-lived conversation state (never silently
+persisted), memory controls (view/clear/disable), and a **model-free crisis
+short-circuit** — high-risk input (EN/MS) never reaches the LLM; it returns a
+canned compassionate safety response with real-world contact guidance.
+Religious claims in companion replies pass the same deterministic citation
+validation as Q&A mode; fabricated citations get their sentences removed or
+the honest §12 notice.
+
+```bash
+uv run python -m scripts.run_companion_eval --models ling_tiny   # §21 matrix
+```
+Latest: **25/25 pass on all four benchmark models** (ling / gemma-4-12b-qat /
+qwen3.5-4b / qwen3.5-9b), crisis routing 7/7 everywhere — see
+`evaluation/companion-benchmark.md`. Correctness is architecture-driven
+(routing + validation), so even the 4B model is companion-grade.
 
 ## Quick start
 

@@ -18,10 +18,12 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from agent.companion.engine import CompanionEngine
+from agent.companion.memory import CompanionMemory
+from agent.companion.state import StateManager
 from agent.core.agent import AgentOrchestrator
 from agent.core.config import load_config
 from agent.core.model import ModelRouter
-from agent.memory.store import MemoryStore
 from agent.policy.source_policy import SourcePolicy, SourceRegistry
 from agent.tools.layer import TOOL_SCHEMAS, ToolLayer, execute_tool
 from agent.validators.pipeline import UNVERIFIABLE_NOTICE, ResponsePipeline
@@ -77,7 +79,7 @@ ORCHESTRATOR = RetrievalOrchestrator(
     tafsir_en_store=TAFSIR_EN_STORE if TAFSIR_EN_COUNT else None,
     vector_store=VECTOR_STORE if (VECTOR_STORE and VECTOR_STORE.size) else None,
 )
-MEMORY = MemoryStore()
+MEMORY = CompanionMemory()
 TOOLS = ToolLayer(
     POLICY, store=STORE,
     hadith_store=HADITH_STORE if HADITH_COUNT else None,
@@ -91,6 +93,11 @@ except Exception:
     ROUTER = None
     PIPELINE = None  # model backend absent: search still works, answers refuse
     AGENT = None
+try:
+    COMPANION = CompanionEngine(ROUTER, ORCHESTRATOR, TOOLS, memory=MEMORY) if ROUTER else None
+except Exception:
+    COMPANION = None
+COMPANION_STATES = StateManager()
 
 
 class AnswerRequest(BaseModel):
@@ -222,6 +229,58 @@ def call_tool(req: ToolCallRequest) -> dict:
     if not result.ok:
         return {"ok": False, "error": result.error}
     return {"ok": True, "data": result.data}
+
+
+class CompanionRequest(BaseModel):
+    session_id: str = "default"
+    message: str
+
+
+@app.post("/api/v1/companion")
+def companion(req: CompanionRequest) -> dict:
+    """Context-aware companion mode (fix_me.md): empathy-first, stateful,
+    crisis-safe, evidence-aware religious guidance."""
+    if COMPANION is None:
+        raise HTTPException(503, "model backend unavailable")
+    response = COMPANION.respond(req.session_id, req.message)
+    return response.to_dict()
+
+
+@app.get("/api/v1/companion/state/{session_id}")
+def companion_state(session_id: str) -> dict:
+    state = COMPANION_STATES.get(session_id, create=False)
+    return {"active": state is not None, "state": state.to_dict() if state else None}
+
+
+@app.delete("/api/v1/companion/state/{session_id}")
+def companion_clear(session_id: str) -> dict:
+    """'Clear conversation' control (§25)."""
+    COMPANION_STATES.drop(session_id)
+    return {"cleared": True}
+
+
+@app.get("/api/v1/memories")
+def memories_view() -> dict:
+    """'View memories' control (§25)."""
+    return MEMORY.memory_view()
+
+
+@app.delete("/api/v1/memories")
+def memories_clear() -> dict:
+    """'Clear memories' control (§25)."""
+    return MEMORY.clear_all()
+
+
+@app.post("/api/v1/memories/disable")
+def memories_disable() -> dict:
+    MEMORY.set_memory_enabled(False)
+    return {"memory_enabled": False}
+
+
+@app.post("/api/v1/memories/enable")
+def memories_enable() -> dict:
+    MEMORY.set_memory_enabled(True)
+    return {"memory_enabled": True}
 
 
 @app.post("/api/v1/answer")

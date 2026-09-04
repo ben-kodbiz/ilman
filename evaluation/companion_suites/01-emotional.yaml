@@ -1,0 +1,36 @@
+# fix_me.md §21 regression matrix — emotional statements.
+# Empathy-first; NO immediate religious dump; single follow-up max.
+suite: emotional
+cases:
+  - id: lonely_plain
+    type: emotional
+    message: "I feel lonely."
+    expect_empathy_first: true
+  - id: terrible_day
+    type: emotional
+    message: "I'm having a terrible day."
+    expect_empathy_first: true
+  - id: nobody_understands
+    type: emotional
+    message: "I feel like nobody understands me."
+    expect_empathy_first: true
+  - id: missing_someone
+    type: emotional
+    message: "I miss someone."
+    expect_empathy_first: true
+  - id: spiritually_empty
+    type: emotional
+    message: "I feel spiritually empty."
+    expect_empathy_first: true
+  - id: angry_now
+    type: emotional
+    message: "I'm angry."
+    expect_empathy_first: true
+  - id: guilty
+    type: emotional
+    message: "I feel guilty."
+    expect_empathy_first: true
+  - id: anxious_tomorrow
+    type: emotional
+    message: "I'm anxious about my exam tomorrow."
+    expect_empathy_first: true

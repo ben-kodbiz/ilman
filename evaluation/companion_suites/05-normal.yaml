@@ -1,0 +1,11 @@
+# fix_me.md §24/§25: companion regression — normal conversation must stay
+# natural; mode transitions must be visible; follow-ups reasonable.
+suite: normal_chat
+cases:
+  - id: greeting
+    message: "Hello, how are you?"
+    expect_mode: qa
+  - id: thanks
+    message: "Thank you, that helped."
+  - id: smalltalk
+    message: "It's raining a lot here today."

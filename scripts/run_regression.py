@@ -62,7 +62,7 @@ def lms_unload(model_id: str) -> None:
         print(f"  [warn] unload {model_id} failed: {e}")
 
 
-def lms_ensure_loaded(model_id: str, timeout_s: int = 240) -> bool:
+def lms_ensure_loaded(model_id: str, timeout_s: int = 600) -> bool:
     """Ensure exactly this LLM is loaded (JIT-load via a chat call)."""
     loaded = lms_loaded_models()
     llms_loaded = {m for m in loaded if m != "text-embedding-nomic-embed-text-v1.5"}

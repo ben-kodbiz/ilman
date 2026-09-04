@@ -1,0 +1,15 @@
+# fix_me.md §21: ambiguous emotional — companion mode, no forced guidance.
+suite: ambiguous
+cases:
+  - id: alone_tonight
+    type: emotional
+    message: "I'm alone tonight."
+    expect_empathy_first: true
+  - id: lost_direction
+    type: emotional
+    message: "I don't know what I'm doing anymore."
+    expect_empathy_first: true
+  - id: feel_empty
+    type: emotional
+    message: "I feel empty."
+    expect_empathy_first: true

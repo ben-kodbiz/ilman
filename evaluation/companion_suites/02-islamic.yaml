@@ -1,0 +1,15 @@
+# fix_me.md §21: islamic questions go to RAG immediately (§10).
+suite: islamic
+cases:
+  - id: quran_loneliness
+    message: "What does the Quran say about loneliness?"
+    expect_mode: qa
+  - id: hadith_patience
+    message: "Give me a hadith about patience."
+    expect_mode: qa
+  - id: explain_ayah
+    message: "Explain Ayat al-Kursi for me."
+    expect_mode: qa
+  - id: ayat_kursi_meaning
+    message: "What does 2:255 mean?"
+    expect_mode: qa
