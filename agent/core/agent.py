@@ -54,6 +54,7 @@ class AgentResult:
     unsupported_citations: list[str]
     evidence: EvidencePack
     trace: AgentTrace
+    misattributed_grades: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -166,11 +167,25 @@ class AgentOrchestrator:
         # contains tool results with citations outside the pack, and a repair
         # appended to that context makes the model mix both citation sets.
         validation = self.validator.validate(final_text, pack)
-        if validation.unsupported_citations:
+        if validation.unsupported_citations or validation.misattributed_grades:
+            problem_lines = []
+            if validation.unsupported_citations:
+                problem_lines.append(
+                    f"- These citations are NOT in the evidence and must be removed: "
+                    f"{validation.unsupported_citations}"
+                )
+            for mg in validation.misattributed_grades:
+                problem_lines.append(
+                    f"- You attributed grading '{mg['grader']}: {mg['claimed']}' which the "
+                    f"cited hadith's metadata does not carry"
+                    + (f" (available there: {mg['available']})" if mg.get("available") else "")
+                    + ". Report gradings ONLY verbatim from the GRADES lines attached to "
+                      "the exact hadith you cite."
+                )
             repair_prompt = (
-                "Rewrite this answer using ONLY the citations listed in the "
-                "evidence block below. Remove any citation not in that list; "
-                "if that removes the substance, reply exactly: "
+                "Rewrite this answer fixing ONLY these problems:\n"
+                + "\n".join(problem_lines)
+                + "\n\nKeep everything else. If fixing removes the substance, reply exactly: "
                 f"{UNVERIFIABLE_NOTICE}\n\n"
                 f"ANSWER TO REWRITE:\n{final_text[:2000]}\n\n"
                 f"<evidence>\n{pack.to_prompt_block()}\n</evidence>\n\n"
@@ -188,9 +203,7 @@ class AgentOrchestrator:
                 validation = self.validator.validate(final_text, pack)
 
         refused = UNVERIFIABLE_NOTICE in final_text
-        verified = not validation.unsupported_citations and (
-            validation.had_any_citation or refused
-        )
+        verified = validation.ok and (validation.had_any_citation or refused)
         trace.retrieved_citations = sorted(pack.citation_ids)
         self._record(query, intent, trace, validation.verified_citations)
 
@@ -204,6 +217,7 @@ class AgentOrchestrator:
             refused=refused,
             citations=validation.verified_citations,
             unsupported_citations=validation.unsupported_citations,
+            misattributed_grades=validation.misattributed_grades,
             evidence=pack,
             trace=trace,
         )
