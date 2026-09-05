@@ -27,6 +27,9 @@ class DebugTrace:
     followup_allowed: int = 1
     model: str = ""
     validation: str = ""
+    planned_query: dict = field(default_factory=dict)
+    evidence_status: str = ""
+    evidence_sufficiency: float = 0.0
     policy: dict = field(default_factory=dict)
     latency_s: float = 0.0
     started_at: float = field(default_factory=time.time)
@@ -46,6 +49,9 @@ class DebugTrace:
             "rag_used": self.rag_used,
             "model": self.model,
             "validation": self.validation,
+            "planned_query": self.planned_query,
+            "evidence_status": self.evidence_status,
+            "evidence_sufficiency": self.evidence_sufficiency,
             "policy": self.policy,
             "latency_s": round(self.latency_s, 2),
         }

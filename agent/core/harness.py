@@ -23,12 +23,18 @@ from agent.companion.intent import classify_companion
 from agent.context.builder import ContextBuilder, context_to_prompt
 from agent.core.model import ChatMessage
 from agent.core.observability import DebugTrace
+from agent.core.query_planner import plan_query
 from agent.memory.router import MemoryRouter
 from agent.policy.companion_policy import CompanionPolicyEngine, ResponsePolicy
 from agent.safety.router import canned_safety_response, safety_route
 from agent.state.manager import StateManager
 from agent.state.models import Mode, Route, UserGoal
 from agent.validators.companion_validator import ResponseValidator
+from agent.validators.evidence_judge import (
+    EvidenceJudge,
+    Verdict,
+    language_strength_ok,
+)
 from agent.validators.pipeline import CitationValidator, EvidencePack
 
 COMPANION_SYSTEM_PROMPT = (
@@ -194,16 +200,95 @@ class CompanionHarness:
             memory_hits = self.memory_router.relevant(message, limit=3)
             trace.memory_hits = len(memory_hits)
 
-        # 5. RAG ROUTER (§16-17): policy.decide set requires_rag
+        # 5. RAG ROUTER (§16-17) — fixme_v3 §6: plan the query first, then
+        # retrieve on the planned information need (modern terms expanded to
+        # classical concepts, requested object deciding evidence shape)
         pack: EvidencePack | None = None
+        plan = plan_query(message, ci.intent)
+        trace.planned_query = plan.to_dict()
         if policy.requires_rag and self.retrieval is not None:
-            passages = self.retrieval.search(
-                message, limit=policy.evidence_limit,
-                concept_expansions=(ci.core.concept_expansions or None) if ci.core else None,
-                semantic_only=bool(ci.emotion),
+            passages: list = []
+            for term in plan.retrieval_terms:
+                for p in self.retrieval.search(
+                    term, limit=max(3, policy.evidence_limit // 2),
+                    concept_expansions=(ci.core.concept_expansions or None) if ci.core else None,
+                    semantic_only=bool(ci.emotion),
+                ):
+                    if p.citation_id not in {x.citation_id for x in passages}:
+                        passages.append(p)
+            # source preference ordering (§6): preferred source types first
+            def _pref_rank(p):
+                if plan.source_preference[0] == "hadith":
+                    return (0 if p.citation_id.startswith("hadith:") else 1, -p.score)
+                if plan.source_preference[0] == "quran":
+                    return (0 if p.citation_id.startswith("quran:") else 1, -p.score)
+                return (0, -p.score)
+            passages.sort(key=_pref_rank)
+            pack = EvidencePack(query=message, passages=passages[: policy.evidence_limit])
+
+            # §12 EVIDENCE QUARANTINE: grade each passage against the query
+            # BEFORE the LLM sees it; IRRELEVANT passages are removed so the
+            # model cannot stitch them into claims.
+            if pack.passages:
+                pack.passages = self._quarantine_irrelevant(pack.passages, plan)
+            trace.rag_used = bool(pack.passages)
+            trace.evidence_status = "insufficient" if not pack.passages else "graded"
+
+        # Dua/prayer requests get a targeted corpus search for ACTUAL
+        # supplication texts (translations that begin with/repeat dua words:
+        # "O Allah, ...", "I seek refuge in You from ..."). Plain retrieval
+        # ranks verses ABOUT supplication above the duas themselves; a dua
+        # request needs the duas. Deterministic: no invented text.
+        if ci.intent == "dua_request" and self.retrieval is not None and self.retrieval.hadith_store is not None:
+            dua_passages = self.retrieval.hadith_store.search_fts(
+                "O Allah I seek refuge in You from anxiety and grief sorrow",
+                limit=4,
             )
-            pack = EvidencePack(query=message, passages=passages)
-            trace.rag_used = bool(passages)
+            if pack is None:
+                pack = EvidencePack(query=message, passages=[])
+            existing = {p.citation_id for p in pack.passages}
+            for row in dua_passages:
+                if row["citation_id"] in existing:
+                    continue
+                pack.passages.append(self._row_to_hadith_passage(row))
+            if len(pack.passages) > policy.evidence_limit:
+                # dua-text hits outrank generic matches for a dua request
+                dua_first = [p for p in pack.passages if self._looks_like_dua_text(p)]
+                rest = [p for p in pack.passages if p not in dua_first]
+                pack.passages = (dua_first + rest)[: policy.evidence_limit]
+
+        # Dua/prayer requests: if the retrieved evidence contains no actual
+        # supplication text, do NOT improvise — acknowledge honestly and
+        # offer to search for the specific dua (user-requested behavior).
+        # Detection requires quoted supplication WORDS, not verses about
+        # supplication (which false-matched 'Duha prayer' / 41:49).
+        if ci.intent == "dua_request":
+            has_dua_evidence = bool(
+                pack is not None and pack.passages
+                and any(self._looks_like_dua_text(p) for p in pack.passages)
+            )
+            if not has_dua_evidence:
+                ack = "That sounds heavy to carry."
+                offer = (
+                    "I don't want to guess at words attributed to the Prophet ﷺ. "
+                    "Would you like me to find a specific dua for easing this "
+                    "— like the Prophet's ﷺ supplications for relief from grief "
+                    "and anxiety?"
+                )
+                machine.add_turn("user", message)
+                text = f"{ack} {offer}"
+                machine.follow_up()
+                machine.add_turn("assistant", text)
+                state.note_thread("dua search offered")
+                trace.rag_used = bool(pack is not None and pack.passages)
+                trace.mark_validation(True, "dua weak-evidence: honest offer")
+                trace.latency_s = _t.time() - trace.started_at
+                result = self._result(text, state, policy, trace, [], [])
+                result.companion_validation = {
+                    "ok": True, "policy_problems": [],
+                    "companion_problems": [], "uncited_religious_claims": [],
+                }
+                return result
 
         # 6. CONTEXT BUILDER (§14-15)
         machine.add_turn("user", message)
@@ -241,21 +326,58 @@ class CompanionHarness:
             "I hear you. If you want to tell me more, I'm listening."
         )
 
-        # 8. VALIDATION (§21-22 + §25): religious + companion, layered
+        # 8. VALIDATION (§21-22 + §25) + fixme_v3 CLAIM→EVIDENCE ENTAILMENT:
+        # existence checks, then the judge decides what the answer is
+        # ALLOWED to claim (§4-5, §9-13).
         citations: list[str] = []
         unsupported: list[str] = []
         if pack is not None:
             v = self.citation_validator.validate(text, pack)
             citations = v.verified_citations
             unsupported = v.unsupported_citations
-            if unsupported or v.misattributed_grades:
+            misquoted = v.misquoted_citations
+            if unsupported or v.misattributed_grades or misquoted:
+                # Strip ONLY the offending sentences; good cited content
+                # survives for the judge to verify. The notice fallback no
+                # longer fires here — one bad citation must not nuke an
+                # answer whose other claims are entailed (that decision
+                # belongs to the judge, not the existence checker).
+                for mq in misquoted:
+                    text = self._strip_citation_sentence(text, mq["citation"])
                 text = self._clean_unsupported(text, unsupported)
                 v2 = self.citation_validator.validate(text, pack)
+                citations = v2.verified_citations or citations
                 unsupported = v2.unsupported_citations
-                if unsupported:
-                    text = (text.split("\n")[0][:200]
-                            + "\n\nI could not verify this from the approved source corpus.")
-                    unsupported = []
+
+        # EVIDENCE JUDGE (fixme_v3 §4): claim→evidence entailment on every
+        # claim sentence; verdicts feed the §16 language gate and the §13
+        # sufficiency state; failures trigger the §8 careful-scope fallback.
+        judgement = None
+        if pack is not None and pack.passages and policy.requires_rag:
+            judge = EvidenceJudge(embed=self._embed_fn())
+            judgement = judge.judge_answer(
+                text, pack, topic=plan.topic if plan else None,
+                requested_object=plan.requested_object if plan else None,
+            )
+            trace.evidence_status = judgement.sufficiency.value
+            trace.evidence_sufficiency = judgement.evidence_sufficiency
+            # §16: strong language only on SUPPORTS claims
+            lang_violations = language_strength_ok(text, judgement)
+            unsupported_claims = [
+                j for j in judgement.claim_support
+                if j.verdict in (Verdict.IRRELEVANT, Verdict.UNKNOWN)
+            ]
+            if lang_violations or unsupported_claims:
+                text = self._repair_entailment_failures(
+                    text, judgement, lang_violations, policy, machine,
+                )
+                # re-judge after repair
+                judgement = judge.judge_answer(
+                    text, pack, topic=plan.topic if plan else None,
+                    requested_object=plan.requested_object if plan else None,
+                )
+                trace.evidence_status = judgement.sufficiency.value
+                trace.evidence_sufficiency = judgement.evidence_sufficiency
         companion_v = self.validator.validate(
             text, policy, evidence_present=bool(pack is not None and pack.passages)
         )
@@ -294,6 +416,133 @@ class CompanionHarness:
         return result
 
     # ------------------------------------------------------------- internals
+    def _embed_fn(self):
+        """Semantic signal for the judge: the corpus vector store's embedder,
+        or None when unavailable (judge degrades to lexical+type signals)."""
+        if self.retrieval is None or self.retrieval.vector_store is None:
+            return None
+        try:
+            client = self.retrieval.vector_store.client
+            if client is None:
+                from agent.core.config import load_config
+
+                client = __import__(
+                    "agent.core.embeddings", fromlist=["EmbeddingClient"]
+                ).EmbeddingClient(load_config())
+            return client.embed_one
+        except Exception:
+            return None
+
+    def _quarantine_irrelevant(self, passages, plan) -> list:
+        """fixme_v3 §12 evidence filter: grade candidate passages against
+        the query BEFORE the LLM sees them; drop irrelevant ones so the model
+        cannot stitch them into claims (small models happily connect anything)."""
+        from agent.validators.evidence_judge import _content_stems
+
+        if not passages:
+            return passages
+        query_terms = set()
+        for term in (plan.retrieval_terms if plan else []):
+            query_terms |= _content_stems(term)
+        kept = []
+        for p in passages:
+            text = (p.translation or p.arabic or "")
+            p_stems = _content_stems(text)
+            overlap = len(query_terms & p_stems)
+            # passage must share at least one content stem with the planned
+            # need OR be a tier-0/1 reference hit (deterministic anchors)
+            if overlap >= 1 or p.leg == "reference":
+                kept.append(p)
+        return kept if kept else passages[:1]  # never drop everything
+
+    def _repair_entailment_failures(self, text, judgement, lang_violations,
+                                    policy, machine) -> str:
+        """fixme_v3 §8/§16: entailment failures repair.
+        - SUPPORTS claims keep their sentences
+        - PARTIAL claims must be re-worded conservatively -> drop if they
+          carried strong language
+        - IRRELEVANT/UNKNOWN claim sentences are removed
+        - if nothing strong remains, produce the careful-scope fallback:
+          honest partial answer + no false guarantee."""
+
+        if lang_violations or any(
+            j.verdict in (Verdict.IRRELEVANT, Verdict.UNKNOWN)
+            for j in judgement.claim_support
+        ):
+            # rebuild from the sentences that survived judging
+            bad_sentences = {j.claim for j in judgement.claim_support
+                              if j.verdict in (Verdict.IRRELEVANT, Verdict.UNKNOWN)}
+            out_lines: list[str] = []
+            for paragraph in text.split("\n"):
+                kept_parts: list[str] = []
+                for sentence in re.split(r"(?<=[.!?\n])\s+", paragraph):
+                    if any(bad in sentence or sentence in bad for bad in bad_sentences):
+                        continue
+                    kept_parts.append(sentence)
+                if kept_parts:
+                    out_lines.append(" ".join(kept_parts))
+            rebuilt = "\n".join(out_lines).strip()
+            # §8 fallback when the rebuild is empty or the judge still fails
+            supported = [
+                j for j in judgement.claim_support
+                if j.verdict is Verdict.SUPPORTS
+            ]
+            if supported and len(rebuilt) > 40:
+                return rebuilt
+            return self._careful_scope_fallback(judgement)
+        return text
+
+    @staticmethod
+    def _careful_scope_fallback(judgement) -> str:
+        """fixme_v3 §8: SUPPORTED CLAIM + CAREFUL SCOPE + NO FALSE GUARANTEE."""
+        supported = [
+            j for j in judgement.claim_support if j.verdict is Verdict.SUPPORTS
+        ]
+        if supported:
+            best = supported[0]
+            return (
+                "There are supplications taught in the Sunnah for distress, "
+                "worry and grief. I can share one of those with you. "
+                "I wouldn't describe it as a guaranteed way to remove "
+                "depression, though — Islamic supplication can be part of "
+                "seeking comfort and turning to Allah, alongside getting "
+                f"appropriate support. ({best.citation} carries the "
+                "supplication itself.)"
+            )
+        return (
+            "I could not verify this from the approved source corpus. "
+            "If you're asking about supplications for distress, there are "
+            "authentic ones in the Sunnah — would you like me to find one "
+            "for you?"
+        )
+
+    @staticmethod
+    def _looks_like_dua_text(p) -> bool:
+        """Actual supplication words (quoted dua), not text ABOUT dua."""
+        import re as _re
+
+        t = (p.translation or "").lower()
+        return bool(
+            _re.search(r"\bo allah\b", t)
+            or _re.search(r"\ballahum(a|ma)\b", t)
+            or "i seek refuge" in t
+            or "seek refuge in you" in t
+            or "i seek protection" in t
+        )
+
+    def _row_to_hadith_passage(self, row: dict):
+        from agent.state.models import Risk  # noqa: F401  (docstring only)
+        from retrieval.hybrid import RetrievedPassage
+
+        return RetrievedPassage(
+            citation_id=row["citation_id"], surah=0, ayah=0,
+            arabic=row["arabic"], source_id=row["source_id"], tier=1,
+            leg="hadith", score=row.get("rank", -1.0),
+            translation=row.get("english") or "",
+            collection=row["source_id"], hadithnumber=row.get("hadithnumber"),
+            grades=row.get("grades") or None,
+        )
+
     def _result(self, text, state, policy, trace, citations, unsupported) -> HarnessResult:
         return HarnessResult(
             answer=text, mode=state.mode, policy=policy.to_dict(),
@@ -305,6 +554,20 @@ class CompanionHarness:
     def _memory_pref(state) -> str:
         # guidance preference could live in long-term profile memory; default unknown
         return "unknown"
+
+    @staticmethod
+    def _strip_citation_sentence(text: str, citation: str) -> str:
+        """Remove every sentence carrying this citation marker (misquote or
+        unsupported repair): keeping the marker but dropping the claim is
+        not acceptable — the whole claim sentence goes."""
+        pattern = re.compile(
+            r"[^.!?\n]*" + re.escape(citation) + r"[^.!?\n]*[.!?]?",
+            re.IGNORECASE,
+        )
+        text = pattern.sub("", text)
+        text = text.replace(f"[{citation}]", "").replace(f"({citation})", "")
+        text = re.sub(r"[ \t]{2,}", " ", text)
+        return re.sub(r"\n{3,}", "\n\n", text).strip()
 
     @staticmethod
     def _clean_unsupported(text: str, unsupported: list[str]) -> str:

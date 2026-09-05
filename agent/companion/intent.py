@@ -44,6 +44,7 @@ EMOTION_PATTERNS: dict[str, list[str]] = {
     "anxiety": [
         r"\b(anxious|anxiety|panic\w*|worried|nervous|on\s+edge)\b",
         r"\bcan'?t\s+stop\s+worrying\b", r"\brasa\s+cemas\b", r"\bgelisah\b",
+        r"\bdepress(ed|ion|ive)?\b", r"\bkemurungan\b", r"\bduka\s+nestapa\b",
     ],
     "anger": [
         r"\b(angry|furious|mad\s+at|rage)\b", r"\bso\s+angry\b", r"\bmarah\b", r"\bpanas\s+baran\b",
@@ -172,7 +173,9 @@ def classify_companion(text: str) -> CompanionIntent:
         intent = "gratitude" if top_emotion == "gratitude" else "normal_chat"
     elif quran_request:
         intent = "quran_request"
-    elif dua_request and not is_question:
+    elif dua_request:
+        # dua mentions route to dua regardless of question form ("Is there
+        # any dua for removing depression?" is still a dua request)
         intent = "dua_request"
     elif reflection and not is_question:
         intent = "reflection_request"
