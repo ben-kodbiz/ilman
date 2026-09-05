@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agent.companion.intent import classify_companion
+from agent.companion.logging import CompanionLogger
 from agent.context.builder import ContextBuilder, context_to_prompt
 from agent.core.model import ChatMessage
 from agent.core.observability import DebugTrace
@@ -103,6 +104,7 @@ class CompanionHarness:
         validator: ResponseValidator | None = None,
         citation_validator: CitationValidator | None = None,
         model_label: str = "",
+        chat_logger: CompanionLogger | None = None,
     ):
         self.router = router
         self.retrieval = retrieval
@@ -113,6 +115,8 @@ class CompanionHarness:
         self.validator = validator or ResponseValidator()
         self.citation_validator = citation_validator or CitationValidator()
         self.model_label = model_label
+        # chat logging (owner-approved troubleshooting capture); None-safe
+        self.chat_logger = chat_logger or CompanionLogger()
 
     # ----------------------------------------------------------------- turn
     def respond(self, session_id: str, message: str,
@@ -147,6 +151,7 @@ class CompanionHarness:
             trace.latency_s = _t.time() - trace.started_at
             result = self._result(text, state, crisis_policy, trace, [], [])
             result.companion_validation = companion_v.to_dict()
+            self.chat_logger.log_turn(session_id, state.turn_count, message, text, result, self.model_label)
             return result
 
         # 2. UNDERSTAND (§1) — deterministic classifier, no model.
@@ -314,6 +319,7 @@ class CompanionHarness:
                     "ok": True, "policy_problems": [],
                     "companion_problems": [], "uncited_religious_claims": [],
                 }
+                self.chat_logger.log_turn(session_id, state.turn_count, message, text, result, self.model_label)
                 return result
 
         # 6. CONTEXT BUILDER (§14-15)
@@ -504,6 +510,7 @@ class CompanionHarness:
         trace.latency_s = _t.time() - trace.started_at
         result = self._result(text, state, policy, trace, citations, unsupported)
         result.companion_validation = companion_v.to_dict()
+        self.chat_logger.log_turn(session_id, state.turn_count, message, text, result, self.model_label)
         return result
 
     # ------------------------------------------------------------- internals
