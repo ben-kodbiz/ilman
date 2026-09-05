@@ -23,6 +23,24 @@ routing:
   tool_calling: ling_tiny
   mobile_default: gemma_qat
 
+# enhance_v1 §25-26 model roles: models declared by ROLE, not identity.
+# Swapping a model is a config change; no architecture code hard-codes
+# providers. Roles map onto the routing classes (single backend).
+model_roles:
+  router: ling_tiny          # escalation/routing decisions
+  generator: ling_tiny       # companion + QA generation
+  validator: ling_tiny       # validation-time reasoning (a generator is not
+  #                          #  automatically trusted as a validator — §26)
+  embedder: text-embedding-nomic-embed-text-v1.5
+  classifier: deterministic  # intent/emotion: rules, no model (§45)
+
+# enhance_v1 §30 privacy/retention (days; 0 = keep until deleted)
+retention:
+  log_retention_days: 180
+  session_retention_days: 2
+  memory_retention_days: 90
+  enable_content_logging: true
+
 defaults:
   backend: lmstudio
   # Fallback role if a routing key is missing.

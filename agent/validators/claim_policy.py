@@ -107,7 +107,8 @@ _ATTRIBUTION_RE = re.compile(
 )
 _DIRECT_FACT_RE = re.compile(
     r"\b(the\s+)?(quran|qur'?an)\b[^.\n]{0,60}"
-    r"\b(says|said|states|tells\s+us|mentions|describes|teaches)\b",
+    r"\b(says|said|states|tells\s+us|mentions|describes|teaches|commands|"
+    r"commanded|orders|ordered|prescribes|prescribed|declares|declared)\b",
     re.IGNORECASE,
 )
 _GENERALIZATION_RE = re.compile(

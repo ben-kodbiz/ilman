@@ -31,7 +31,12 @@ CREATE TABLE IF NOT EXISTS user_facts (
     fact TEXT NOT NULL,
     category TEXT NOT NULL DEFAULT 'general',
     last_referenced REAL NOT NULL,
-    source TEXT NOT NULL DEFAULT 'user'
+    source TEXT NOT NULL DEFAULT 'user',
+    -- enhance_v1 §18-20 memory provenance columns
+    source_class TEXT NOT NULL DEFAULT 'explicit_user',
+    confidence REAL NOT NULL DEFAULT 1.0,
+    expires_at REAL,
+    updated_at REAL
 );
 """
 
@@ -54,14 +59,38 @@ class CompanionMemory(MemoryStore):
 
         with sqlite3.connect(self.db_path) as con:
             con.executescript(FACT_SCHEMA)
+            self._migrate(con)
         self.memory_enabled = memory_enabled
         self.fact_ttl_days = 90
 
+    @staticmethod
+    def _migrate(con) -> None:
+        """Backward-compatible column migration: older DBs created before
+        enhance_v1 §18 lack the provenance columns; add them in place."""
+        cols = {r[1] for r in con.execute("PRAGMA table_info(user_facts)")}
+        migrations = {
+            "source_class": "ALTER TABLE user_facts ADD COLUMN source_class TEXT NOT NULL DEFAULT 'explicit_user'",
+            "confidence": "ALTER TABLE user_facts ADD COLUMN confidence REAL NOT NULL DEFAULT 1.0",
+            "expires_at": "ALTER TABLE user_facts ADD COLUMN expires_at REAL",
+            "updated_at": "ALTER TABLE user_facts ADD COLUMN updated_at REAL",
+        }
+        for col, ddl in migrations.items():
+            if col not in cols:
+                con.execute(ddl)
+
     # -- §5C policy gate --------------------------------------------------
     def save_fact(self, fact: str, category: str = "general",
-                  explicit: bool = False) -> int:
-        """Save a durable user fact. Rejects transient emotional statements
-        unless the user EXPLICITLY asked to remember (explicit=True)."""
+                  explicit: bool = False, confidence: float = 1.0,
+                  expires_at: float | None = None,
+                  source_class: str | None = None) -> int:
+        """Save a durable user fact with provenance (enhance_v1 §18).
+
+        Source classes (§19): EXPLICIT_USER (persistable per policy) /
+        SYSTEM / IMPORTED / INFERRED (must NOT silently become permanent —
+        inferred facts require lower confidence + expiry) / TEMPORARY.
+        Rejects transient emotional statements unless the user EXPLICITLY
+        asked to remember. INFERRED ≠ FACT (§19 critical rule): inferred
+        memories carry confidence < 1.0 and an expiry by default."""
         fact = (fact or "").strip()
         if not fact:
             raise FactRejected("empty fact")
@@ -73,12 +102,30 @@ class CompanionMemory(MemoryStore):
             )
         from datetime import datetime
 
+        # §19 provenance: source class + confidence + expiry
+        if source_class is None:
+            source_class = "explicit_user" if explicit else "inferred"
+        source_class = source_class.lower()
+        if source_class not in ("explicit_user", "system", "imported",
+                                "inferred", "temporary"):
+            raise FactRejected(f"unknown source class: {source_class}")
+        if source_class == "inferred":
+            # §19: INFERRED must NOT automatically become permanent
+            confidence = min(confidence, 0.7)
+            if expires_at is None:
+                expires_at = time.time() + 14 * 86400  # 14-day default expiry
+        if source_class == "temporary":
+            if expires_at is None:
+                expires_at = time.time() + 86400  # session-scale default
+
         with self._connect() as con:
             cur = con.execute(
-                "INSERT INTO user_facts (created_at, fact, category, last_referenced, source) "
-                "VALUES (?,?,?,?,?)",
+                "INSERT INTO user_facts (created_at, fact, category, last_referenced, source, "
+                "source_class, confidence, expires_at, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
                 (datetime.now(UTC).isoformat(), fact, category, time.time(),
-                 "user" if explicit else "inferred"),
+                 "user" if explicit else "inferred",
+                 source_class, confidence, expires_at, time.time()),
             )
             return cur.lastrowid
 
@@ -86,7 +133,8 @@ class CompanionMemory(MemoryStore):
         self._expire_facts()
         with self._connect() as con:
             rows = con.execute(
-                "SELECT id, created_at, fact, category, source FROM user_facts "
+                "SELECT id, created_at, fact, category, source, source_class, "
+                "confidence, expires_at FROM user_facts "
                 "ORDER BY id DESC LIMIT ?", (limit,)
             ).fetchall()
         return [dict(r) for r in rows]
@@ -102,9 +150,16 @@ class CompanionMemory(MemoryStore):
             return cur.rowcount
 
     def _expire_facts(self) -> None:
-        cutoff = time.time() - self.fact_ttl_days * 86400
+        """§20 retention: last-referenced TTL + explicit expires_at both
+        purge; deterministic sweep on every read."""
+        now = time.time()
+        ttl_cutoff = now - self.fact_ttl_days * 86400
         with self._connect() as con:
-            con.execute("DELETE FROM user_facts WHERE last_referenced < ?", (cutoff,))
+            con.execute("DELETE FROM user_facts WHERE last_referenced < ?", (ttl_cutoff,))
+            con.execute(
+                "DELETE FROM user_facts WHERE expires_at IS NOT NULL AND expires_at < ?",
+                (now,),
+            )
 
     # -- §6 relevant retrieval -------------------------------------------
     def relevant_facts(self, message: str, limit: int = 3) -> list[dict]:

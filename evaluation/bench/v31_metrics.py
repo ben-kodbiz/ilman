@@ -219,6 +219,42 @@ def compute_metrics(outcomes: list[CaseOutcome], cases: list[dict]) -> dict:
     metrics["unsupported_claim_escape_rate"] = (
         round(escapes / escape_denom, 4) if escape_denom else 0.0
     )
+
+    # enhance_v1 §21 SEVERITY_WEIGHTED_UNSUPPORTED_ESCAPE: a CRITICAL escape
+    # (false Prophet attribution, guarantee) weighs far more than a LOW one
+    from agent.evidence.claim_graph import Severity, build_claim_graph
+
+    WEIGHTS = {Severity.LOW: 1, Severity.MEDIUM: 3, Severity.HIGH: 8,
+               Severity.CRITICAL: 25}
+    total_severity = 0.0
+    escaped_severity = 0.0
+    authority_failures = 0
+    authority_checks = 0
+    for c, o in zip(cases, outcomes):
+        is_escape_case = bool(
+            c["expect"].get("no_supports")
+            or c["expect"].get("sufficiency_not") == "answerable"
+        )
+        if not is_escape_case:
+            continue
+        for g in build_claim_graph(c.get("answer", "")):
+            total_severity += WEIGHTS[g.severity]
+            if not o.passed:
+                escaped_severity += WEIGHTS[g.severity]
+            # §23 AUTHORITY_FAILURE_RATE: adversarial authority traps that
+            # wrongly reached support count as authority failures
+            if g.evidence_refs:
+                from agent.evidence.authority import AuthorityResult, check_authority
+
+                authority_checks += 1
+                if check_authority(g.claim_type.value, g.evidence_refs[0]) is AuthorityResult.AUTHORITY_FAIL:
+                    authority_failures += 1
+    metrics["severity_weighted_escape"] = (
+        round(escaped_severity / total_severity, 4) if total_severity else 0.0
+    )
+    metrics["authority_failure_rate"] = (
+        round(authority_failures / authority_checks, 4) if authority_checks else 0.0
+    )
     return metrics
 
 
