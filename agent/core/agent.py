@@ -98,11 +98,29 @@ class AgentOrchestrator:
         intent: IntentResult = classify(query)
         trace = AgentTrace(intent=intent.intent, task_class=intent.routed_task_class)
 
-        # 1. Seed evidence deterministically (§14 references never come from the model)
+        # 0. Deterministic concept anchors (query planner §6): well-known
+        # concept queries load their canonical sources directly — no
+        # retrieval lottery ('How does the Qur'an begin?' -> 1:1-1:3)
+        from agent.core.query_planner import plan_query
+
+        plan = plan_query(query, intent.intent)
         passages: list[RetrievedPassage] = []
+        for cid in plan.anchor_citations:
+            if cid.startswith("quran:"):
+                _, surah, ayah = cid.split(":")
+                row = self.retrieval.store.get_ayah(int(surah), int(ayah), lang="en")
+                if row:
+                    passages.append(self.retrieval._to_passage(row, "reference", 1.0))
+            elif cid.startswith("hadith:") and self.retrieval.hadith_store is not None:
+                _, collection, number = cid.split(":")
+                row = self.retrieval.hadith_store.get_hadith(collection, int(number))
+                if row:
+                    passages.append(self._hadith_row_to_passage(row, "reference", 1.0))
+
+        # 1. Seed evidence deterministically (§14 references never come from the model)
         for ref in intent.quran_refs[:3]:
             row = self.retrieval.store.get_ayah(ref["surah"], ref["ayah"])
-            if row:
+            if row and all(p.citation_id != f"quran:{ref['surah']}:{ref['ayah']}" for p in passages):
                 passages.append(self.retrieval._to_passage(row, "reference", 1.0))
         for href in intent.hadith_refs[:3]:
             row = self.retrieval.hadith_store.get_hadith(href["collection"], href["number"]) \
