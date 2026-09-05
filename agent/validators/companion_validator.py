@@ -92,6 +92,16 @@ class ResponseValidator:
         companion_problems: list[str] = []
         uncited_claims: list[str] = []
 
+        # RAG-route non-answers: the user asked a question, evidence exists,
+        # and the 'answer' is generic listening empathy -> that is a wrong
+        # answer for the mode, regardless of claim cleanliness.
+        if evidence_present and policy.route == "rag":
+            lowered = text.lower().strip()
+            if lowered.startswith(("i hear you", "i'm listening", "i am listening", "if you want to tell me")):
+                companion_problems.append(
+                    "QA non-answer: listening fallback on a question route"
+                )
+
         if DEPENDENCY_RE.search(text):
             companion_problems.append("dependency-forming language")
         if HUMAN_PRETENSE_RE.search(text):

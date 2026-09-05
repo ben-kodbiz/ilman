@@ -183,6 +183,62 @@ class TestSafetyGolden:
 
 
 # ----------------------------------------------------- §27 multi-turn scenario
+class TestEmptyQAOutput:
+    """Observed live failure (gemma-4-12b): QA question, evidence retrieved,
+    model returned empty content -> harness answered with the companion
+    'I hear you' fallback. Wrong answer semantics for QA mode."""
+
+    def test_empty_qa_retry_then_notice(self):
+        class EmptyRouter:
+            def __init__(self):
+                self.calls = 0
+
+            def chat(self, task_class, messages, tools=None, max_tokens=1200, **kw):
+                from agent.core.model import ModelResponse
+
+                self.calls += 1
+                # QA route must never return the listening fallback
+                assert task_class == "complex_rag", (
+                    f"QA question must route to complex_rag, got {task_class}"
+                )
+                return ModelResponse(content="", tool_calls=[], finish_reason="length")
+
+        h = _harness(EmptyRouter(), memory=None)
+        h.retrieval = None  # still QA-mode: islamic question -> rag policy
+        r = h.respond("s-pillars", "What's the pillar of islam?")
+        assert "I hear you" not in r.answer
+        assert "could not verify" in r.answer.lower()
+        assert r.trace["route"] in ("rag", "chat", "qa")
+
+    def test_empty_companion_keeps_listening(self):
+        """Companion mode empty output keeps the empathic fallback — that IS
+        the right semantics there."""
+        class EmptyCompanionRouter:
+            def chat(self, task_class, messages, tools=None, max_tokens=1200, **kw):
+                from agent.core.model import ModelResponse
+
+                return ModelResponse(content="", tool_calls=[], finish_reason="length")
+
+        h = _harness(EmptyCompanionRouter(), memory=None)
+        h.retrieval = None
+        r = h.respond("s-lonely", "I feel lonely.")
+        assert "I hear you" in r.answer or "listening" in r.answer.lower()
+
+    def test_qa_listening_fallback_fails_validation(self):
+        """Evidence exists + question route: 'I hear you' must be a
+        companion-validation failure, not a pass."""
+        from agent.policy.companion_policy import ResponsePolicy
+        from agent.validators.companion_validator import ResponseValidator
+
+        policy = ResponsePolicy(route="rag")
+        v = ResponseValidator().validate(
+            "I hear you. If you want to tell me more, I'm listening.",
+            policy, evidence_present=True,
+        )
+        assert not v.ok
+        assert any("non-answer" in p for p in v.companion_problems)
+
+
 class TestMultiTurnContinuity:
     def test_loneliness_thread(self, memory):
         """fixme_v2 §27 example: 4-turn emotional thread keeps state continuity."""

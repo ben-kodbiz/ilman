@@ -257,6 +257,19 @@ class EvidenceJudge:
         if not type_fit:
             score *= 0.35  # type mismatch caps support hard
 
+        # 3b) enumerated-content support: a passage that LISTS items
+        # (e.g. the pillars hadith listing all five) supports a claim about
+        # ONE of its list items — the item's key terms are all present in
+        # the passage even though stem-overlap ratio is low. Key-term
+        # coverage is the signal, not ratio.
+        claim_key_terms = [t for t in claim_stems if len(t) >= 5]
+        key_coverage = (
+            sum(1 for t in claim_key_terms if t in passage_stems)
+            / max(len(claim_key_terms), 1)
+        )
+        if claim_key_terms and key_coverage >= 0.6:
+            score = max(score, 0.4 + 0.3 * key_coverage)
+
         # strong language demands strong evidence (§16)
         if claim.uses_strong_language and score < 0.7:
             return Verdict.PARTIAL if score >= 0.45 else Verdict.IRRELEVANT, score, (

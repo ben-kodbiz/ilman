@@ -35,7 +35,11 @@ from agent.validators.evidence_judge import (
     Verdict,
     language_strength_ok,
 )
-from agent.validators.pipeline import CitationValidator, EvidencePack
+from agent.validators.pipeline import (
+    UNVERIFIABLE_NOTICE,
+    CitationValidator,
+    EvidencePack,
+)
 
 COMPANION_SYSTEM_PROMPT = (
     "You are Ilman, a warm, calm and humble Islamic companion. You are an AI — "
@@ -224,6 +228,19 @@ class CompanionHarness:
                     return (0 if p.citation_id.startswith("quran:") else 1, -p.score)
                 return (0, -p.score)
             passages.sort(key=_pref_rank)
+            # deterministic concept anchors (fixme_v3 §6): the canonical
+            # narrations for well-known concepts go straight to the pack head
+            if plan.anchor_citations and self.retrieval.hadith_store is not None:
+                anchor_rows = []
+                for cid in plan.anchor_citations:
+                    _, collection, number = cid.split(":")
+                    row = self.retrieval.hadith_store.get_hadith(collection, int(number))
+                    if row:
+                        anchor_rows.append(self._row_to_hadith_passage(row))
+                anchor_ids = {r.citation_id for r in anchor_rows}
+                passages = anchor_rows + [
+                    p for p in passages if p.citation_id not in anchor_ids
+                ]
             pack = EvidencePack(query=message, passages=passages[: policy.evidence_limit])
 
             # §12 EVIDENCE QUARANTINE: grade each passage against the query
@@ -307,7 +324,12 @@ class CompanionHarness:
                 "from it and cite as shown ([quran:surah:ayah], [hadith:collection:"
                 "number]). Statements like 'The Quran says...' or 'The Prophet "
                 "said...' MUST quote this evidence with a citation — an uncited "
-                "religious quote will be removed."
+                "religious quote will be removed. CRITICAL: state ONLY what the "
+                "quoted passage itself says — do not add details from your own "
+                "knowledge (numbers, times, conditions) that the quoted text does "
+                "not contain. If the evidence lists items, present those items "
+                "exactly as the evidence words them. Unsupported additions will "
+                "be detected and removed."
             )
         else:
             parts.append(
@@ -322,9 +344,27 @@ class CompanionHarness:
             "simple_chat" if state.mode is Mode.COMPANION else "complex_rag",
             messages, max_tokens=max_tokens,
         )
-        text = resp.content.strip() or (
-            "I hear you. If you want to tell me more, I'm listening."
-        )
+        text = resp.content.strip()
+        # Empty/length-cut model output: RAG route (a question was asked,
+        # evidence exists) -> one doubled-budget retry, then the honest §12
+        # notice — NEVER the companion-listening line, which answers a
+        # different question ("I hear you" to "what is wudoo?" is wrong).
+        # Companion route keeps the empathic fallback: listening IS valid.
+        if not text:
+            if state.mode is Mode.COMPANION:
+                text = "I hear you. If you want to tell me more, I'm listening."
+            else:
+                retry = self.router.chat(
+                    "complex_rag", messages, max_tokens=max_tokens * 2,
+                )
+                text = retry.content.strip()
+                trace.notes.append("empty QA output: retried with doubled budget")
+        if not text:
+            if state.mode is Mode.COMPANION:
+                text = "I hear you. If you want to tell me more, I'm listening."
+            else:
+                text = UNVERIFIABLE_NOTICE
+                trace.notes.append("QA empty after retry: honest notice")
 
         # 8. VALIDATION (§21-22 + §25) + fixme_v3 CLAIM→EVIDENCE ENTAILMENT:
         # existence checks, then the judge decides what the answer is
@@ -332,6 +372,8 @@ class CompanionHarness:
         citations: list[str] = []
         unsupported: list[str] = []
         if pack is not None:
+            # first: rebind malformed-but-genuine quotes to their real source
+            text = self._repair_malformed_citations(text, pack)
             v = self.citation_validator.validate(text, pack)
             citations = v.verified_citations
             unsupported = v.unsupported_citations
@@ -494,26 +536,24 @@ class CompanionHarness:
 
     @staticmethod
     def _careful_scope_fallback(judgement) -> str:
-        """fixme_v3 §8: SUPPORTED CLAIM + CAREFUL SCOPE + NO FALSE GUARANTEE."""
+        """fixme_v3 §8: SUPPORTED CLAIM + CAREFUL SCOPE + NO FALSE GUARANTEE.
+        Generic wording — the topic-specific offer (dua etc.) is handled by
+        the intent-specific flows, not here."""
         supported = [
             j for j in judgement.claim_support if j.verdict is Verdict.SUPPORTS
         ]
         if supported:
             best = supported[0]
             return (
-                "There are supplications taught in the Sunnah for distress, "
-                "worry and grief. I can share one of those with you. "
-                "I wouldn't describe it as a guaranteed way to remove "
-                "depression, though — Islamic supplication can be part of "
-                "seeking comfort and turning to Allah, alongside getting "
-                f"appropriate support. ({best.citation} carries the "
-                "supplication itself.)"
+                "I can share what the sources say on this, though I could "
+                "not fully verify every detail of what I first wrote. "
+                f"The most directly relevant passage is {best.citation} — "
+                "would you like me to walk through it?"
             )
         return (
             "I could not verify this from the approved source corpus. "
-            "If you're asking about supplications for distress, there are "
-            "authentic ones in the Sunnah — would you like me to find one "
-            "for you?"
+            "If it helps, tell me more about what you're looking for and "
+            "I'll search the sources again."
         )
 
     @staticmethod
@@ -568,6 +608,53 @@ class CompanionHarness:
         text = text.replace(f"[{citation}]", "").replace(f"({citation})", "")
         text = re.sub(r"[ \t]{2,}", " ", text)
         return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    def _repair_malformed_citations(self, text: str, pack) -> str:
+        """Models emit malformed citation forms (e.g. 'quran:surah:al-imran:
+        3:109'). When the surrounding claim QUOTES a pack passage, rebind the
+        marker to that passage's real citation id — the quote is genuine, only
+        the marker form is wrong. Surgical: only exact-quote matches repair."""
+        import re as _re
+
+        if not pack or not pack.passages:
+            return text
+        bad_marker = _re.compile(
+            # well-formed brackets with invalid ids: [quran:surah:al-imran:3:109]
+            r"\[(?P<bad>quran:surah:[a-z'\-]+:\d+:\d+|quran:s[a-z'\-]+:[^\]]*)\]"
+            # unterminated/overlapping markers the models leave mid-text
+            r"|\[(?:quran|qur'a?n):s(?:urah)?[:-][a-z'\-]*(?:[:-]\d+)*(?![\w\]:])"
+            # truncated quran-marker fragments: '[qura' / '[quran' mid-prose,
+            # only when NOT followed by more marker chars or a letter+colon
+            r"|\[qur?a?n?(?=[\s,.)\]]|$)"
+        )
+        # replace right-to-left: mutating the string while iterating
+        # forward shifted offsets and corrupted following words
+        matches = list(bad_marker.finditer(text))
+        for m in reversed(matches):
+            window = text[max(0, m.start() - 400): m.start()]
+            best_id, best_hits = None, 0
+            for p in pack.passages:
+                ptext = p.translation or p.arabic or ""
+                hits = sum(
+                    1 for frag in _re.findall(r"[a-z' ]{12,}", window.lower())
+                    if frag.strip() in ptext.lower()
+                )
+                if hits > best_hits:
+                    best_hits, best_id = hits, p.citation_id
+            if best_id and best_hits > 0:
+                text = text[: m.start()] + f"[{best_id}]" + text[m.end():]
+        # strip model self-talk leaks (reasoning phrases that survived
+        # into the final answer)
+        text = _re.sub(
+            r"[—-]?\s*wait,? let me check[^.]*\.?|"
+            r"[—-]?\s*let me (check|verify|look)[^.]*\.?|"
+            r"[—-]?\s*I need to (check|verify|find)[^.]*\.?",
+            "",
+            text,
+        )
+        text = _re.sub(r"\[qu\[", "[", text)  # rebind residue cleanup
+        text = _re.sub(r"\s{2,}", " ", text)
+        return text
 
     @staticmethod
     def _clean_unsupported(text: str, unsupported: list[str]) -> str:

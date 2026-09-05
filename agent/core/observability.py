@@ -31,6 +31,7 @@ class DebugTrace:
     evidence_status: str = ""
     evidence_sufficiency: float = 0.0
     policy: dict = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
     latency_s: float = 0.0
     started_at: float = field(default_factory=time.time)
 

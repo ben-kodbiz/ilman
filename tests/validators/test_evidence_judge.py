@@ -61,6 +61,14 @@ class TestDepressionDuaGolden:
         ci = classify_companion("Is there any prayer / zikr / dua for removing depression?")
         assert ci.intent == "dua_request"
 
+    def test_pillars_query_planning(self):
+        """Observed live failure: 'What's the pillar of islam?' — QA route
+        with retrieval, but the answer was the companion listening fallback.
+        The planner must expand the concept to its classical source phrasing
+        (the corpus says 'Islam is built upon five', not 'pillars')."""
+        plan = plan_query("What's the pillar of islam?", "islamic_question")
+        assert any("built upon five" in t for t in plan.retrieval_terms)
+
     def test_query_plan(self):
         plan = plan_query(
             "Is there any prayer / zikr / dua for removing depression?",
