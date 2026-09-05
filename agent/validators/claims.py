@@ -49,7 +49,18 @@ STRONG_CONNECTIVE_RE = re.compile(
     r"\b(this\s+proves|the\s+evidence\s+shows|the\s+evidence\s+points|"
     r"therefore|thus\s+it\s+is\s+clear|it\s+is\s+certain\s+that|"
     r"allah\s+alone|only\s+allah\s+can|this\s+means\s+that|"
-    r"guarantees?|definitely|certainly\s+cures?|will\s+certainly)\b",
+    r"definitely|will\s+certainly|"
+    # medical-certainty upgrades (fixme_v3 §15: comfort->cure is forbidden
+    # language unless the source actually entails it)
+    r"guarantees?|guaranteed|"
+    r"cures?|heals?|healed|"
+    r"will\s+cure|cures\s+depression|"
+    r"removes\s+depression|removes?\s+\w+\s+completely|"
+    r"disappears?\s+if|"
+    r"proving\s+this|prescribed\s+to\s+cure|"
+    r"replacing\s+therapy|replaces?\s+(therapy|treatment)|"
+    r"the\s+islamic\s+treatment\s+for|"
+    r"within\s+a\s+(month|week|days?))\b",
     re.IGNORECASE,
 )
 

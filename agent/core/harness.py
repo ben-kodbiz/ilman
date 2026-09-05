@@ -230,13 +230,22 @@ class CompanionHarness:
             passages.sort(key=_pref_rank)
             # deterministic concept anchors (fixme_v3 §6): the canonical
             # narrations for well-known concepts go straight to the pack head
-            if plan.anchor_citations and self.retrieval.hadith_store is not None:
+            if plan.anchor_citations:
                 anchor_rows = []
                 for cid in plan.anchor_citations:
-                    _, collection, number = cid.split(":")
-                    row = self.retrieval.hadith_store.get_hadith(collection, int(number))
-                    if row:
-                        anchor_rows.append(self._row_to_hadith_passage(row))
+                    if cid.startswith("hadith:"):
+                        _, collection, number = cid.split(":")
+                        if self.retrieval.hadith_store is not None:
+                            row = self.retrieval.hadith_store.get_hadith(
+                                collection, int(number)
+                            )
+                            if row:
+                                anchor_rows.append(self._row_to_hadith_passage(row))
+                    elif cid.startswith("quran:"):
+                        _, surah, ayah = cid.split(":")
+                        row = self.retrieval.store.get_ayah(int(surah), int(ayah), lang="en")
+                        if row:
+                            anchor_rows.append(self.retrieval._to_passage(row, "reference", 1.0))
                 anchor_ids = {r.citation_id for r in anchor_rows}
                 passages = anchor_rows + [
                     p for p in passages if p.citation_id not in anchor_ids

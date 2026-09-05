@@ -43,6 +43,16 @@ CONCEPT_ANCHORS: list[tuple[re.Pattern, list[str]]] = [
      ["hadith:sahih-bukhari:631", "hadith:sahih-bukhari:6251"]),
     (re.compile(r"etiquette\s+of\s+eating|how\s+to\s+eat", re.I),
      ["hadith:sahih-muslim:2022", "hadith:sahih-bukhari:5376"]),
+    # opening/meta queries -> the first surah, deterministically (the
+    # fatihah canary: 'how does the Quran begin' has no lexical handle)
+    (re.compile(
+        r"how\s+does\s+(the\s+)?(quran|qur'?an)\s+(begin|start|open)|"
+        r"(first|opening)\s+(surah|chapter)|what\s+is\s+the\s+first\s+surah|"
+        r"opening\s+of\s+(the\s+)?(the\s+)?(quran|qur'?an)", re.I),
+     ["quran:1:1", "quran:1:2", "quran:1:3"]),
+    # ayat al-kursi meta
+    (re.compile(r"throne\s+verse|ayat\s*al.?kursi|ayatul\s+kursi", re.I),
+     ["quran:2:255"]),
 ]
 CONCEPT_QUERIES: list[tuple[re.Pattern, list[str]]] = [
     (re.compile(r"pillar[s]?\s+of\s+islam|arkan\s+al\s+islam|five\s+pillar", re.I),
