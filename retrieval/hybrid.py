@@ -195,42 +195,48 @@ class RetrievalOrchestrator:
         # provenance stay intact; then the same §8 filter applies.
         vector_hits: list[RetrievedPassage] = []
         if self.vector_store is not None and self.vector_store.size:
-            seen_cids = {
-                p.citation_id
-                for leg in (ref_hits, fts_hits, translation_hits, hadith_hits, tafsir_hits)
-                for p in leg
-            }
-            if semantic_only:
-                # emotional mode: take the highest-cosine hits across ALL
-                # vector queries (cosine is comparable across queries in the
-                # same space; positional RRF would favor whichever expansion
-                # ran first instead of the genuinely closest passages).
-                candidates: dict[str, dict] = {}
-                for vq in vector_queries:
-                    for hit in self.vector_store.search(vq, top_k=limit):
-                        cid = hit["citation_id"]
-                        if cid not in candidates or hit["score"] > candidates[cid]["score"]:
-                            candidates[cid] = hit
-                ranked = sorted(candidates.values(), key=lambda h: -h["score"])
-                for hit in ranked:
-                    if hit["citation_id"] in seen_cids:
-                        continue
-                    passage = self._resolve_vector_hit(hit)
-                    if passage:
-                        vector_hits.append(passage)
-                vector_hits = vector_hits[:limit]
-            else:
-                per_query = max(4, limit // 2)
-                for vq in vector_queries:
-                    for hit in self.vector_store.search(vq, top_k=per_query):
+            try:
+                seen_cids = {
+                    p.citation_id
+                    for leg in (ref_hits, fts_hits, translation_hits, hadith_hits, tafsir_hits)
+                    for p in leg
+                }
+                if semantic_only:
+                    # emotional mode: take the highest-cosine hits across ALL
+                    # vector queries (cosine is comparable across queries in the
+                    # same space; positional RRF would favor whichever expansion
+                    # ran first instead of the genuinely closest passages).
+                    candidates: dict[str, dict] = {}
+                    for vq in vector_queries:
+                        for hit in self.vector_store.search(vq, top_k=limit):
+                            cid = hit["citation_id"]
+                            if cid not in candidates or hit["score"] > candidates[cid]["score"]:
+                                candidates[cid] = hit
+                    ranked = sorted(candidates.values(), key=lambda h: -h["score"])
+                    for hit in ranked:
                         if hit["citation_id"] in seen_cids:
                             continue
                         passage = self._resolve_vector_hit(hit)
                         if passage:
                             vector_hits.append(passage)
-                            seen_cids.add(passage.citation_id)
-                vector_hits = vector_hits[: limit * 2]
+                    vector_hits = vector_hits[:limit]
+                else:
+                    per_query = max(4, limit // 2)
+                    for vq in vector_queries:
+                        for hit in self.vector_store.search(vq, top_k=per_query):
+                            if hit["citation_id"] in seen_cids:
+                                continue
+                            passage = self._resolve_vector_hit(hit)
+                            if passage:
+                                vector_hits.append(passage)
+                                seen_cids.add(passage.citation_id)
+                    vector_hits = vector_hits[: limit * 2]
 
+            except Exception:
+                # embedding backend unavailable -> this leg skips; the
+                # lexical legs + anchors still answer. A dead vector
+                # leg must never kill search entirely.
+                vector_hits = []
         # Fusion: RRF over all legs; exact-reference hits always survive
         fused = self._rrf(
             [ref_hits, fts_hits, translation_hits, hadith_hits, tafsir_hits, vector_hits], k=60
