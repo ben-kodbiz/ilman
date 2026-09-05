@@ -367,6 +367,20 @@ class EvidenceJudge:
         # ("no equal" vs "none comparable") IS legitimately semantic. For
         # SHORT claims (paraphrase-scale) the cosine above 0.55 is strong
         # evidence of restatement; long claims still need lexical corroboration.
+        # §11 authority axis (enhance_v1): entailment AND authority are
+        # separate checks. A tafsir chunk quoting a verse cannot SUPPORT a
+        # claim asserted as "The Quran says/commands" — wrong source class
+        # caps the verdict at PARTIAL with an AUTHORITY_FAIL reason.
+        from agent.evidence.authority import AuthorityResult, check_authority
+
+        claim_type_name = getattr(claim, "claim_type", None)
+        claim_type_name = claim_type_name.value if hasattr(claim_type_name, "value") else str(claim_type_name or "")
+        # authority lookup keys on the CITATION (always prefixed, e.g.
+        # hadith:sahih-bukhari:6369) — source_id is the bare collection
+        # name for hadiths and cannot be prefix-matched
+        citation = getattr(passage, "citation_id", "") or getattr(passage, "source_id", "")
+        authority = check_authority(claim_type_name, citation)
+
         sem_component = max(sem - 0.4, 0.0) * 0.5
         if len(claim_text.split()) <= 14 and sem >= 0.55:
             sem_component = max(sem_component, (sem - 0.45) * 1.6)
@@ -383,6 +397,11 @@ class EvidenceJudge:
                 if passage_key:
                     covered = sum(1 for t in passage_key if t in claim_stems) / len(passage_key)
                     if covered >= 0.5:  # claim covers >= half the passage's stems
+                        if authority is AuthorityResult.AUTHORITY_FAIL:
+                            return Verdict.PARTIAL, 0.45, (
+                                "AUTHORITY_FAIL: source class not qualified "
+                                "for this claim type"
+                            )
                         prelim = (
                             (1.0 if quote_match else 0.0) * 0.45
                             + min(overlap_ratio * 1.6, 1.0) * 0.3 + sem_component
@@ -433,8 +452,16 @@ class EvidenceJudge:
             )
 
         if quote_match and type_fit:
+            if authority is AuthorityResult.AUTHORITY_FAIL:
+                return Verdict.PARTIAL, min(score, 0.5), (
+                    "AUTHORITY_FAIL: source class not qualified for this claim type"
+                )
             return Verdict.SUPPORTS, max(score, 0.85), "quoted passage text"
         if score >= 0.7 and type_fit:
+            if authority is AuthorityResult.AUTHORITY_FAIL:
+                return Verdict.PARTIAL, min(score, 0.5), (
+                    "AUTHORITY_FAIL: source class not qualified for this claim type"
+                )
             return Verdict.SUPPORTS, score, "strong content overlap"
         if score >= 0.4:
             return Verdict.PARTIAL, score, "partial relevance"

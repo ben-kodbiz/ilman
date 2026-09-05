@@ -1,0 +1,33 @@
+# enhance_v1 §24 — authority adversarial traps: source-class confusion.
+category: authority
+cases:
+  # tafsir presented as Quran text
+  - id: auth_001
+    answer: "The Quran says in this verse that Allah tests His servants with hardship [tafsir-en:tafsir_sadi_en_001_5e91edb1_00131]."
+    passages: [{citation_id: tafsir-en:tafsir_sadi_en_001_5e91edb1_00131, text: "2:153. O you who believe, seek help through patience and prayer."}]
+    expect: {no_supports: true}
+  # tafsir interpretation as direct Quran claim
+  - id: auth_002
+    answer: "The Quran commands seeking help through patience and prayer [tafsir-en:tafsir_sadi_en_001_5e91edb1_00131]."
+    passages: [{citation_id: tafsir-en:tafsir_sadi_en_001_5e91edb1_00131, text: "2:153. O you who believe, seek help through patience and prayer."}]
+    expect: {no_supports: true}
+  # unregistered collection treated as sahih hadith
+  - id: auth_003
+    answer: "The Prophet ﷺ said this in an authentic hadith [hadith:sunan-al-farabi:42]."
+    passages: [{citation_id: hadith:sahih-bukhari:1, text: "Deeds are by intention."}]
+    expect: {no_supports: true}
+  # secondary/lecture source establishing prophetic attribution (§24 example)
+  - id: auth_004
+    answer: "The Prophet ﷺ commanded this, as mentioned in a lecture [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  # model opinion as ruling
+  - id: auth_005
+    answer: "This is definitely haram according to the evidence [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  # legitimate: quran verse supporting a direct Quran claim
+  - id: auth_006
+    answer: "The Quran says hearts find rest in the remembrance of Allah [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah. Unquestionably, by the remembrance of Allah hearts are assured."}]
+    expect: {supports_citation: quran:13:28}
