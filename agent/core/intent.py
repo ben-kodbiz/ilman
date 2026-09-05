@@ -42,9 +42,18 @@ EMOTIONAL_PATTERNS: dict[str, list[str]] = {
     "alone": ["loneliness companionship", "Allah is near responds to dua",
               "do not grieve Allah does not forsake"],
     "sad": ["sadness grief hearts find rest", "do not despair of Allah's mercy"],
-    "depressed": ["sadness grief hearts find rest", "do not despair of Allah's mercy",
-                  "Allah is near responds to dua"],
     "anxious": ["anxiety fear hearts find rest in remembrance", "Allah is near responds to dua"],
+    "depressed": [
+        "dua seeking refuge from grief anxiety sorrow",
+        "Prophet dua against anxiety and grief",
+        "hearts find rest in remembrance of Allah",
+        "Allah is near responds to dua",
+    ],
+    "depression": [
+        "dua seeking refuge from grief anxiety sorrow",
+        "Prophet dua against anxiety and grief",
+        "supplication removing sadness distress worry",
+    ],
     "afraid": ["fear of Allah trust in Allah", "do not fear Allah protects the believers"],
     "worried": ["anxiety fear hearts find rest in remembrance", "trust in Allah put your reliance"],
     "grieving": ["grief loss patience and prayer", "do not despair of Allah's mercy",
@@ -56,7 +65,7 @@ EMOTIONAL_PATTERNS: dict[str, list[str]] = {
 EMOTIONAL_RE = re.compile(
     r"\b(i am|i feel|feeling|i'm)\s+(so\s+|very\s+|really\s+|completely\s+|all\s+)?"
     + r"(" + "|".join(EMOTIONAL_PATTERNS) + r")\b"
-    + r"|\b(lonely|alone|sad|depressed|anxious|afraid|worried|grieving|hopeless)\b",
+    + r"|\b(lonely|alone|sad|depressed|depression|anxious|anxiety|afraid|worried|grieving|hopeless)\b",
     re.IGNORECASE,
 )
 

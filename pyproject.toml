@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.52.4",
     "numpy>=2.4.6",
+    "gradio>=6.26.0",
 ]
 
 [dependency-groups]

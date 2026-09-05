@@ -70,7 +70,7 @@ MODERATE_PATTERNS = [
     r"\bhopeless\b",
     r"\bno\s+point\s+in\s+(living|anything)\b",
     r"\bcan'?t\s+(take|do)\s+this\s+anymore\b",
-    r"\bgive\s+up\b",
+    r"\bgiv(e|ing)\s+up\b",
     r"\bwhat'?s\s+the\s+point\b",
     r"\bworthless\s+person\b",
     # MS/ID

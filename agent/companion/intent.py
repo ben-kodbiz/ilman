@@ -27,6 +27,7 @@ COMPANION_INTENTS = {
 EMOTION_PATTERNS: dict[str, list[str]] = {
     "loneliness": [
         r"\b(lonely|aloneness)\b", r"\bno\s+one\b.*\b(cares?|understands?)\b",
+        r"\bnobody\b.*\b(checks?|calls?|asks?|cares?)\b",
         r"\bfeel\s+(alone|isolated|left\s+out)\b", r"\bsepi\b", r"\bsendiri\b.*\b(rasa|saja)\b",
     ],
     "grief": [
@@ -35,9 +36,15 @@ EMOTION_PATTERNS: dict[str, list[str]] = {
         r"\bpassed\s+away\b", r"\bdied\b", r"\bdeath\b.*\b(family|friend|father|mother)\b",
         r"\bkematian\b", r"\bsedih\b.*\b(kematian|hilang)\b",
     ],
+    "sadness": [
+        r"\bfeel\s+sad\b", r"\bfeeling\s+sad\b", r"\bi'?m\s+so\s+down\b",
+        r"\bsad\b.*\b(as\s+a\s+muslim|lately|inside)\b",
+        r"\bterrible\s+day\b", r"\bsedih\b",
+    ],
     "anxiety": [
         r"\b(anxious|anxiety|panic\w*|worried|nervous|on\s+edge)\b",
         r"\bcan'?t\s+stop\s+worrying\b", r"\brasa\s+cemas\b", r"\bgelisah\b",
+        r"\bdepress(ed|ion|ive)?\b", r"\bkemurungan\b", r"\bduka\s+nestapa\b",
     ],
     "anger": [
         r"\b(angry|furious|mad\s+at|rage)\b", r"\bso\s+angry\b", r"\bmarah\b", r"\bpanas\s+baran\b",
@@ -61,6 +68,8 @@ EMOTION_PATTERNS: dict[str, list[str]] = {
         r"\b(spiritually\s+empty|empty\s+inside|far\s+from\s+(allah|god|islam))\b",
         r"\biman\b.*\b(low|lemah|turun)\b", r"\bfeel\s+disconnected\s+from\s+allah\b",
         r"\bno\s+khushu\b", r"\bsolat\b.*\b(rasa\s+kosong|tidak\s+khusyuk)\b",
+        r"\b(prayers?|salat|solat|worship|ibadah)\b.*\b(empty|meaningless|mechanical|distant)\b",
+        r"\bfeel(s|ing)?\s+empty\b.*\b(prayer|worship|lately)\b",
     ],
     "gratitude": [
         r"\b(grateful|thankful|alhamdulillah|blessed)\b", r"\bsyukur\b",
@@ -71,8 +80,9 @@ FIRST_PERSON_RE = re.compile(
     r"\b(i|i'm|im|i\s+feel|i\s+am|saya|aku)\b", re.IGNORECASE
 )
 ISLAMIC_QUESTION_RE = re.compile(
-    r"\b(islam|quran|qur'?an|hadith|sunnah|allah|prophet|fiqh|halal|haram|"
-    r"salat|solat|prayer|fasting|ramadan|zakah|tafsir|ayah|surah|verse|dua)\b",
+    r"\b(islam|quran|qur'?an|hadith|sunnah|allah|prophet|muslim|muslims|fiqh|"
+    r"halal|haram|salat|solat|prayer|fasting|ramadan|zakah|tafsir|ayah|surah|"
+    r"verse|dua)\b",
     re.IGNORECASE,
 )
 QUESTION_MARK_RE = re.compile(r"\?")
@@ -144,6 +154,12 @@ def classify_companion(text: str) -> CompanionIntent:
     first_person = bool(FIRST_PERSON_RE.search(text))
     islamic = bool(ISLAMIC_QUESTION_RE.search(text))
     quran_request = bool(QURAN_REQUEST_RE.search(text))
+    # past-tense thanks/gratitude about earlier content is NOT a new request:
+    # "That verse helped, thank you." -> gratitude, not quran_question
+    gratitude_re = re.compile(
+        r"\b(thank you|thanks|that helped|helped me|alhamdulillah|syukur)\b", re.IGNORECASE
+    )
+    is_gratitude_reply = bool(gratitude_re.search(text)) and not QUESTION_MARK_RE.search(text)
     dua_request = bool(DUA_REQUEST_RE.search(text))
     reflection = bool(REFLECTION_RE.search(text))
     relationship = bool(RELATIONSHIP_RE.search(text))
@@ -152,9 +168,14 @@ def classify_companion(text: str) -> CompanionIntent:
     ))
 
     # intent priority ladder
-    if quran_request:
+    if is_gratitude_reply and not quran_request and not hadith_request:
+        # acknowledging help received: companion continuation, no retrieval
+        intent = "gratitude" if top_emotion == "gratitude" else "normal_chat"
+    elif quran_request:
         intent = "quran_request"
-    elif dua_request and not is_question:
+    elif dua_request:
+        # dua mentions route to dua regardless of question form ("Is there
+        # any dua for removing depression?" is still a dua request)
         intent = "dua_request"
     elif reflection and not is_question:
         intent = "reflection_request"
@@ -164,10 +185,14 @@ def classify_companion(text: str) -> CompanionIntent:
         intent = "hadith_question"
     elif core.quran_refs or core.intent in ("quran_lookup", "quran_search"):
         intent = "quran_question"
+    elif islamic and is_question and emotions:
+        # "Is it wrong to feel sad as a Muslim?" — islamic framing of a
+        # personal feeling: RAG with empathy (policy engine handles the blend)
+        intent = "islamic_question"
     elif emotions and first_person and not (islamic and is_question):
         intent = top_emotion if top_emotion in {
-            "loneliness", "grief", "anxiety", "anger", "guilt", "fear",
-            "confusion", "spiritual_low",
+            "loneliness", "grief", "sadness", "anxiety", "anger", "guilt",
+            "fear", "confusion", "spiritual_low",
         } else "emotional_support"
     elif emotions:
         intent = "emotional_support"
@@ -189,7 +214,10 @@ def classify_companion(text: str) -> CompanionIntent:
     needs_guidance = intent in (
         "quran_request", "hadith_question", "quran_question",
         "islamic_question", "fiqh_question", "dua_request", "reflection_request",
-    ) or (emotions and (islamic or is_question))
+    ) or bool(
+        emotions and (islamic or is_question)
+        and intent not in ("gratitude", "normal_chat")
+    )
 
     needs_clarification = bool(
         emotions and not is_question and len(text.split()) < 15

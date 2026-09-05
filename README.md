@@ -77,6 +77,57 @@ qwen3.5-4b / qwen3.5-9b), crisis routing 7/7 everywhere — see
 `evaluation/companion-benchmark.md`. Correctness is architecture-driven
 (routing + validation), so even the 4B model is companion-grade.
 
+## Companion Harness v2 (fixme_v2)
+
+The companion harness (branch `feature01`) layers state/policy/context/
+memory/safety/validation around the UNCHANGED knowledge architecture:
+
+- `agent/state/` — structured ConversationState (mode/intent/emotion/risk/
+  user_goal/requires_rag/requires_followup) + state machine (UNDERSTAND →
+  ROUTE → RESPOND → FOLLOW_UP → CONTINUE) with recent-context windowing
+- `agent/policy/companion_policy.py` — machine-readable ResponsePolicy:
+  RAG decision, follow-up limits, tone, word budgets, preach control,
+  safety override (companion policy can never soften safety)
+- `agent/context/` — budgeted ContextPack: recent turns + top-relevant
+  memory + retrieved evidence only; never whole-database prompts
+- `agent/memory/router.py` — categorized memory (PROFILE/PREFERENCE/FACT/
+  STUDY/OPEN_THREAD/SUMMARY) with importance/stability/privacy/dedup
+  lifecycle; transient emotions still never persist
+- `agent/safety/router.py` — independent low/elevated/high gate
+- `agent/core/harness.py` — the full pipeline; model only generates language
+- `agent/validators/companion_validator.py` — policy + tone + dependency +
+  human-pretense + diagnosis checks layered over existing religious checks
+
+Evaluation (fixme_v2 §26-28): `evaluation/companion/{cases,scenarios}.jsonl`
+with the weighted companion score:
+
+```bash
+uv run python -m scripts.run_companion_score --models ling_tiny
+```
+
+Ling-3.0-tiny: **companion score 100.0** (32/32 cases, 4/5 multi-turn
+scenarios — one live-model word-budget variance, tracked). Grounded
+regression unchanged at 80% / 7% hallucination.
+
+## Dev console (live chat testing)
+
+A Gradio console wired to every component for interactive testing:
+
+```bash
+uv run python -m apps.devui.console     # http://127.0.0.1:7860
+```
+
+- **Companion (v2)** tab — full harness chat with live developer trace
+  (intent/emotion/risk/policy/validation), model-role switching, session id,
+  and memory view/clear controls
+- **Grounded QA** tab — the AgentOrchestrator with tool-call and citation
+  metadata
+- **Search (all legs)** tab — raw hybrid retrieval for corpus debugging
+
+The FastAPI `/api/v1/companion` endpoint now serves the v2 harness (§33
+public shape, no internal trace); the v1 engine remains at
+`/api/v1/companion/v1` for comparison.
+
 ## Quick start
 
 ```bash
