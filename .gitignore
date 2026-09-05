@@ -9,6 +9,10 @@ __pycache__/
 knowledge/processed/*.db
 knowledge/processed/*.npz
 
+# Companion chat logs: PRIVATE conversation capture (local-only, §31);
+# never publish — same rule as the classic-tafsir hold
+knowledge/processed/companion_logs/
+
 # Classic English tafsir source DB (467MB) — PRIVATE LOCAL STUDY ONLY (§21):
 # print-edition copyright unresolved; must never be published or redistributed.
 # Its derived chunks live in knowledge.db (also excluded).

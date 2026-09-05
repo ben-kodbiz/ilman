@@ -300,6 +300,70 @@ def companion_clear(session_id: str) -> dict:
     return {"cleared": True}
 
 
+# ------------------------------------------------------------ chat logs
+# owner-approved troubleshooting capture (local-only, gitignored). Sensitive
+# (crisis) turns require explicit opt-in.
+@app.get("/api/v1/logs/sessions")
+def log_sessions() -> dict:
+    from agent.companion.logging import CompanionLogger
+
+    sessions = []
+    for s in CompanionLogger.read_sessions():
+        turns = CompanionLogger.read_turns(s)
+        sessions.append({
+            "session_id": s,
+            "turns": len(turns),
+            "sensitive_turns": sum(1 for t in turns if t.get("sensitive")),
+        })
+    return {"sessions": sessions}
+
+
+@app.get("/api/v1/logs/stats")
+def log_stats() -> dict:
+    from agent.companion.logging import CompanionLogger
+
+    return CompanionLogger.stats()
+
+
+@app.get("/api/v1/logs/{session_id}")
+def log_read(session_id: str, include_sensitive: bool = False) -> dict:
+    from agent.companion.logging import CompanionLogger
+
+    turns = CompanionLogger.read_turns(
+        session_id, include_sensitive=include_sensitive
+    )
+    return {"session_id": session_id, "turns": turns}
+
+
+@app.delete("/api/v1/logs/{session_id}")
+def log_redact_session(session_id: str) -> dict:
+    """§25 control: overwrite this session's log content with [REDACTED],
+    preserving the metadata rows (append-only audit trail stays intact)."""
+    import glob
+    import json as _json
+    import re as _re
+
+    from agent.companion.logging import LOG_DIR
+
+    safe = _re.sub(r"[^A-Za-z0-9_.-]", "_", session_id)[:80]
+    rewritten = 0
+    for path in glob.glob(str(LOG_DIR / f"{safe}-*.jsonl")):
+        p = Path(path)
+        lines = []
+        for line in p.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            rec = _json.loads(line)
+            if rec.get("session_id") == session_id:
+                rec["user"]["text"] = "[REDACTED]"
+                rec["companion"]["text"] = "[REDACTED]"
+                rec["redacted"] = True
+                rewritten += 1
+            lines.append(_json.dumps(rec, ensure_ascii=False))
+        p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"session_id": session_id, "records_redacted": rewritten}
+
+
 @app.get("/api/v1/memories")
 def memories_view() -> dict:
     """'View memories' control (§25)."""
