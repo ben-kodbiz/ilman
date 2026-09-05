@@ -364,6 +364,39 @@ def log_redact_session(session_id: str) -> dict:
     return {"session_id": session_id, "records_redacted": rewritten}
 
 
+# ---------------------------------------------------------------- ratings
+class RatingRequest(BaseModel):
+    session_id: str
+    turn: int
+    rating: str  # "up" | "down"
+    answer_excerpt: str = ""
+
+
+@app.post("/api/v1/ratings")
+def submit_rating(req: RatingRequest) -> dict:
+    """Thumbs up/down on a companion answer; stored locally for pipeline
+    analysis (down-rated turns are the troubleshooting signal)."""
+    from agent.companion.ratings import RatingError, enrich_from_chat_log, record_rating
+
+    try:
+        pipeline = enrich_from_chat_log(req.session_id, req.turn)
+        path = record_rating(
+            req.session_id, req.turn, req.rating,
+            answer_excerpt=req.answer_excerpt, pipeline=pipeline,
+        )
+        return {"ok": True, "stored": str(path)}
+    except RatingError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/v1/ratings/analysis")
+def ratings_analysis_endpoint() -> dict:
+    """Aggregate of rated turns — down-rated breakdown for enhancement."""
+    from agent.companion.ratings import ratings_analysis
+
+    return ratings_analysis()
+
+
 @app.get("/api/v1/memories")
 def memories_view() -> dict:
     """'View memories' control (§25)."""

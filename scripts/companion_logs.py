@@ -1,5 +1,6 @@
 """Companion log analysis/export CLI.
 
+    uv run python -m scripts.companion_logs stats|ratings
     uv run python -m scripts.companion_logs stats
     uv run python -m scripts.companion_logs sessions
     uv run python -m scripts.companion_logs read <session_id> [--no-sensitive]
@@ -69,6 +70,15 @@ def cmd_export_all(args) -> None:
         print(f"exported: {path}")
 
 
+def cmd_ratings(_args) -> None:
+    """Rating aggregate: down-rated turns are the pipeline-enhancement
+    signal (owner's stated purpose)."""
+    from agent.companion.ratings import ratings_analysis
+
+    a = ratings_analysis()
+    print(json.dumps(a, indent=2, ensure_ascii=False))
+
+
 def cmd_watch(_args) -> None:
     """Live tail: print new turn records as they are appended."""
     known_files: set[Path] = set()
@@ -111,6 +121,7 @@ def main() -> None:
     sub.add_parser("stats")
     sub.add_parser("sessions")
     sub.add_parser("watch")
+    sub.add_parser("ratings")
 
     p_read = sub.add_parser("read")
     p_read.add_argument("session")
@@ -129,7 +140,8 @@ def main() -> None:
 
     args = parser.parse_args()
     {"stats": cmd_stats, "sessions": cmd_sessions, "read": cmd_read,
-     "export": cmd_export, "export-all": cmd_export_all, "watch": cmd_watch}[args.cmd](args)
+     "export": cmd_export, "export-all": cmd_export_all, "watch": cmd_watch,
+     "ratings": cmd_ratings}[args.cmd](args)
 
 
 if __name__ == "__main__":

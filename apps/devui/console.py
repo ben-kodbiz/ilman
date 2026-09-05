@@ -82,6 +82,10 @@ AGENT: AgentOrchestrator | None = None
 _HARNESSES: dict[str, CompanionHarness] = {}
 
 
+# last exchange bookkeeping for the rating buttons (session -> turn + answer)
+_LAST_EXCHANGE: dict[str, dict] = {}
+
+
 def _harness(role: str) -> CompanionHarness:
     """One harness instance per model role (runtime switchable, §24)."""
     if role not in _HARNESSES:
@@ -132,6 +136,10 @@ def companion_chat(message, history, session, model_role, show_trace):
         meta.append(f"**validation**: {'ok' if cv.get('ok') else cv}")
     answer = result.answer + ("\n\n" + "\n\n".join(meta) if meta else "")
     history = history + [{"role": "assistant", "content": answer}]
+    _LAST_EXCHANGE[session or "devui"] = {
+        "turn": result.state.get("turn_count", 0),
+        "answer": result.answer,
+    }
     trace_text = ""
     if show_trace:
         import json
@@ -140,6 +148,24 @@ def companion_chat(message, history, session, model_role, show_trace):
         trace_text += "\n\nstate:\n" + json.dumps(result.state, indent=2, ensure_ascii=False)
         trace_text += "\n\npolicy:\n" + json.dumps(result.policy, indent=2, ensure_ascii=False)
     yield history, trace_text, _status()
+
+
+def rate_answer(session, rating):
+    """Thumb up/down the most recent answer; stored with the chat-log turn
+    link + pipeline snapshot for later down-rating analysis."""
+    try:
+        from agent.companion.ratings import enrich_from_chat_log, record_rating
+
+        last = _LAST_EXCHANGE.get(session or "devui")
+        if not last:
+            return "no answer to rate yet."
+        pipeline = enrich_from_chat_log(session or "devui", last["turn"])
+        record_rating(session or "devui", last["turn"], rating,
+                      answer_excerpt=last["answer"][:200], pipeline=pipeline)
+        return ("👍 thanks — noted as a good answer." if rating == "up"
+                else "👎 noted — flagged for pipeline review.")
+    except Exception as e:
+        return f"rating failed: {e}"
 
 
 def companion_clear(session):
@@ -237,6 +263,10 @@ def build_app() -> gr.Blocks:
                             label="model role (runtime routing)",
                         )
                         show_trace = gr.Checkbox(label="show developer trace (§32)", value=True)
+                        with gr.Row():
+                            thumb_up = gr.Button("👍 good answer")
+                            thumb_down = gr.Button("👎 bad answer")
+                        rate_feedback = gr.Markdown()
                         trace = gr.TextArea(label="trace / state / policy", lines=22, max_lines=30)
                 with gr.Accordion("Memory controls (§25)", open=False):
                     with gr.Row():
@@ -248,6 +278,12 @@ def build_app() -> gr.Blocks:
                            [chat, trace, status])
                 msg.submit(companion_chat, [msg, chat, session, model_role, show_trace],
                            [chat, trace, status])
+                thumb_up.click(
+                    lambda s: rate_answer(s, "up"), [session], rate_feedback
+                )
+                thumb_down.click(
+                    lambda s: rate_answer(s, "down"), [session], rate_feedback
+                )
                 clear.click(companion_clear, [session], [chat, trace, status])
                 mem_view_btn.click(memory_view, None, mem_out)
                 mem_clear_btn.click(memory_clear, None, mem_out)
@@ -278,9 +314,12 @@ def build_app() -> gr.Blocks:
 
 
 def main() -> None:
+    import os
+
     app = build_app()
-    app.launch(server_name="127.0.0.1", server_port=7860, show_error=True,
-               inbrowser=True, css=".footer {display:none}")
+    host = os.environ.get("ILMAN_HOST", "127.0.0.1")
+    app.launch(server_name=host, server_port=7860, show_error=True,
+               inbrowser=(host == "127.0.0.1"), css=".footer {display:none}")
 
 
 if __name__ == "__main__":
