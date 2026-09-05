@@ -20,13 +20,22 @@ from pydantic import BaseModel
 
 from agent.companion.engine import CompanionEngine
 from agent.companion.memory import CompanionMemory
-from agent.companion.state import StateManager
+from agent.context.builder import ContextBuilder
 from agent.core.agent import AgentOrchestrator
 from agent.core.config import load_config
+from agent.core.harness import CompanionHarness
 from agent.core.model import ModelRouter
+from agent.memory.router import MemoryRouter
+from agent.policy.companion_policy import CompanionPolicyEngine
 from agent.policy.source_policy import SourcePolicy, SourceRegistry
+from agent.state.manager import StateManager
 from agent.tools.layer import TOOL_SCHEMAS, ToolLayer, execute_tool
-from agent.validators.pipeline import UNVERIFIABLE_NOTICE, ResponsePipeline
+from agent.validators.companion_validator import ResponseValidator
+from agent.validators.pipeline import (
+    UNVERIFIABLE_NOTICE,
+    CitationValidator,
+    ResponsePipeline,
+)
 from ingestion.hadith_ingest import KUTUB_AL_SITTAH, HadithStore
 from ingestion.quran_ingest import DEFAULT_DB, QuranStore
 from ingestion.tafsir_en_ingest import TafsirEnStore
@@ -94,7 +103,24 @@ except Exception:
     PIPELINE = None  # model backend absent: search still works, answers refuse
     AGENT = None
 try:
-    COMPANION = CompanionEngine(ROUTER, ORCHESTRATOR, TOOLS, memory=MEMORY) if ROUTER else None
+    COMPANION_V1 = CompanionEngine(ROUTER, ORCHESTRATOR, TOOLS, memory=MEMORY) if ROUTER else None
+except Exception:
+    COMPANION_V1 = None
+try:
+    DEV_MEMORY_ROUTER = MemoryRouter(MEMORY)
+    COMPANION = (
+        CompanionHarness(
+            ROUTER, retrieval=ORCHESTRATOR, memory_router=DEV_MEMORY_ROUTER,
+            states=StateManager(),
+            policy_engine=CompanionPolicyEngine(),
+            context_builder=ContextBuilder(),
+            validator=ResponseValidator(),
+            citation_validator=CitationValidator(),
+            model_label="v2",
+        )
+        if ROUTER
+        else None
+    )
 except Exception:
     COMPANION = None
 COMPANION_STATES = StateManager()
@@ -238,18 +264,33 @@ class CompanionRequest(BaseModel):
 
 @app.post("/api/v1/companion")
 def companion(req: CompanionRequest) -> dict:
-    """Context-aware companion mode (fix_me.md): empathy-first, stateful,
-    crisis-safe, evidence-aware religious guidance."""
+    """Context-aware companion mode (fixme_v2 harness): state/policy/context/
+    memory/safety/citation-validation. The public response is the §33 shape:
+    answer, mode, intent, citations — no internal debug trace."""
     if COMPANION is None:
         raise HTTPException(503, "model backend unavailable")
     response = COMPANION.respond(req.session_id, req.message)
-    return response.to_dict()
+    data = response.to_dict()
+    # §33: strip developer trace from the public client payload
+    data.pop("debug_trace", None)
+    return data
+
+
+@app.post("/api/v1/companion/v1")
+def companion_v1(req: CompanionRequest) -> dict:
+    """Legacy v1 companion engine — kept for comparison during the v2 bake."""
+    if COMPANION_V1 is None:
+        raise HTTPException(503, "model backend unavailable")
+    return COMPANION_V1.respond(req.session_id, req.message).to_dict()
 
 
 @app.get("/api/v1/companion/state/{session_id}")
 def companion_state(session_id: str) -> dict:
-    state = COMPANION_STATES.get(session_id, create=False)
-    return {"active": state is not None, "state": state.to_dict() if state else None}
+    machine = COMPANION_STATES.machine(session_id, create=False)
+    return {
+        "active": machine is not None,
+        "state": machine.state.to_dict() if machine else None,
+    }
 
 
 @app.delete("/api/v1/companion/state/{session_id}")

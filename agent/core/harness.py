@@ -217,6 +217,18 @@ class CompanionHarness:
         parts = [system, prompt_block]
         if pack is not None and pack.passages:
             parts.append(f"<evidence>\n{pack.to_prompt_block()}\n</evidence>")
+            parts.append(
+                "EVIDENCE IS PROVIDED: build the religious substance of your answer "
+                "from it and cite as shown ([quran:surah:ayah], [hadith:collection:"
+                "number]). Statements like 'The Quran says...' or 'The Prophet "
+                "said...' MUST quote this evidence with a citation — an uncited "
+                "religious quote will be removed."
+            )
+        else:
+            parts.append(
+                "NO EVIDENCE IS PROVIDED: make NO religious quotes, claims, or "
+                "attributions — empathy and general warmth only."
+            )
         messages = [
             ChatMessage(role="system", content="\n\n".join(parts)),
             ChatMessage(role="user", content=f"User says: {message}"),
@@ -244,11 +256,27 @@ class CompanionHarness:
                     text = (text.split("\n")[0][:200]
                             + "\n\nI could not verify this from the approved source corpus.")
                     unsupported = []
-        companion_v = self.validator.validate(text, policy)
+        companion_v = self.validator.validate(
+            text, policy, evidence_present=bool(pack is not None and pack.passages)
+        )
         if not companion_v.ok:
-            # deterministic repairs for the two worst classes
+            # deterministic repairs for the worst classes
             text = self._repair_dependency(text)
-            companion_v = self.validator.validate(text, policy)
+            if companion_v.uncited_religious_claims:
+                text = self._strip_religious_claims(text)
+            companion_v = self.validator.validate(
+                text, policy, evidence_present=bool(pack is not None and pack.passages)
+            )
+            if not companion_v.ok and companion_v.uncited_religious_claims:
+                # still failing -> keep only the empathic opening + honest notice
+                first_line = text.split("\n")[0][:200]
+                text = (
+                    f"{first_line}\n\nI could not verify this from the approved "
+                    "source corpus."
+                )
+                companion_v = self.validator.validate(
+                    text, policy, evidence_present=bool(pack is not None and pack.passages)
+                )
 
         # 9. bookkeeping + follow-up phase
         if "?" in text:
@@ -287,6 +315,25 @@ class CompanionHarness:
             text = pattern.sub("", text)
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
+
+    @staticmethod
+    def _strip_religious_claims(text: str) -> str:
+        """§22: remove sentences carrying uncited religious claims, keep the
+        empathy and everything else."""
+        from agent.validators.companion_validator import CITATION_MARKER_RE, RELIGIOUS_CLAIM_RE
+
+        out_lines: list[str] = []
+        for paragraph in text.split("\n"):
+            kept: list[str] = []
+            for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
+                if RELIGIOUS_CLAIM_RE.search(sentence) and not CITATION_MARKER_RE.search(sentence):
+                    continue  # drop the uncited claim sentence
+                kept.append(sentence)
+            out_lines.append(" ".join(kept))
+        cleaned = "\n".join(out_lines)
+        cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        return cleaned.strip()
 
     @staticmethod
     def _repair_dependency(text: str) -> str:

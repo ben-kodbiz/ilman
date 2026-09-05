@@ -194,7 +194,7 @@ class PolicyValidator:
         words = len(response_text.split())
         if words > policy.word_budget * 1.5:
             problems.append(f"verbosity: {words} words exceeds budget {policy.word_budget}")
-        if policy.preach is False:
+        if policy.preach is False and policy.mode.value == "companion":
             first = response_text.strip().split("\n")[0].lower()
             for opener in ("allah says", "the quran says", "quran says", "the prophet said"):
                 if first.startswith(opener):

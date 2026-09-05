@@ -109,6 +109,25 @@ Ling-3.0-tiny: **companion score 100.0** (32/32 cases, 4/5 multi-turn
 scenarios — one live-model word-budget variance, tracked). Grounded
 regression unchanged at 80% / 7% hallucination.
 
+## Dev console (live chat testing)
+
+A Gradio console wired to every component for interactive testing:
+
+```bash
+uv run python -m apps.devui.console     # http://127.0.0.1:7860
+```
+
+- **Companion (v2)** tab — full harness chat with live developer trace
+  (intent/emotion/risk/policy/validation), model-role switching, session id,
+  and memory view/clear controls
+- **Grounded QA** tab — the AgentOrchestrator with tool-call and citation
+  metadata
+- **Search (all legs)** tab — raw hybrid retrieval for corpus debugging
+
+The FastAPI `/api/v1/companion` endpoint now serves the v2 harness (§33
+public shape, no internal trace); the v1 engine remains at
+`/api/v1/companion/v1` for comparison.
+
 ## Quick start
 
 ```bash
