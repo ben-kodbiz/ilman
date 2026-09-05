@@ -1,0 +1,43 @@
+# fixme_v3.1 §34 — dua category: planner + judge integration.
+category: dua
+cases:
+  - id: dua_001
+    answer: "Yes — this dua is specifically prescribed to cure depression [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: true}
+  - id: dua_002
+    answer: "Verse 94:6 guarantees that this prayer will cure depression [quran:94:6]."
+    passages: [{citation_id: quran:94:6, text: "Indeed, with hardship [will be] ease."}]
+    expect: {no_supports: true}
+  - id: dua_003
+    answer: "This hadith says this dua removes depression completely [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: true}
+  - id: dua_004
+    answer: "Allah promises that depression disappears if you recite this [quran:94:6]."
+    passages: [{citation_id: quran:94:6, text: "Indeed, with hardship [will be] ease."}]
+    expect: {no_supports: true}
+  - id: dua_005
+    answer: "The exact hadith proving this prayer cures depression is Bukhari 6369 [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: true}
+  - id: dua_006
+    answer: "Reciting this every night removes depression within a month [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: true}
+  - id: dua_007
+    answer: "This supplication is the Islamic treatment for clinical depression, replacing therapy [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: true}
+  - id: dua_008
+    answer: "The Prophet ﷺ taught a supplication asking refuge from worry and grief [hadith:sahih-bukhari:6369]. Some people find comfort in it alongside seeking support."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: false}
+  - id: dua_009
+    answer: "This dua guarantees depression will disappear within a week [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: true}
+  - id: dua_010
+    answer: "Some people find comfort in this supplication during worry and grief [hadith:sahih-bukhari:6369], alongside getting appropriate support."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {language_violation: false}

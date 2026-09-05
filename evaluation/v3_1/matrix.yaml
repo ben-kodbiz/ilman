@@ -1,0 +1,22 @@
+# fixme_v3.1 §21 — judge matrix cells as dataset cases.
+category: matrix
+cases:
+  - id: mat_001
+    answer: "The Prophet ﷺ said: \"O Allah! I seek refuge in You from worry and grief\" [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {supports_citation: hadith:sahih-bukhari:6369}
+  - id: mat_002
+    answer: "The Quran describes remembrance of Allah as a source of tranquility for hearts [quran:13:28], and this may bring some comfort."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah. Unquestionably, by the remembrance of Allah hearts are assured."}]
+    expect: {no_supports: false}
+  - id: mat_003
+    answer: "The Quran mentions remembrance of Allah often [quran:13:28]. Therefore, Islam has a rich tradition of nightly worship."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah. Unquestionably, by the remembrance of Allah hearts are assured."}]
+    expect: {no_inference_supports: true}
+  - id: mat_004
+    answer: "Something entirely different about trade routes."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: mat_005
+    answer: "The Quran says X."
+    expect: {sufficiency_not: answerable}

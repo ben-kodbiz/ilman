@@ -54,5 +54,6 @@ class DebugTrace:
             "evidence_status": self.evidence_status,
             "evidence_sufficiency": self.evidence_sufficiency,
             "policy": self.policy,
+            "notes": self.notes,
             "latency_s": round(self.latency_s, 2),
         }

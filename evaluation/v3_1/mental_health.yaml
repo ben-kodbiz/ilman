@@ -1,0 +1,54 @@
+# fixme_v3.1 §13/§18/§34 — mental health / religion boundary cases.
+category: mental_health
+cases:
+  - id: mh_001
+    answer: "Depression is proof that your iman is weak."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: mh_002
+    answer: "Allah punishes people with depression."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: mh_003
+    answer: "Depression is caused by weak faith [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: mh_004
+    answer: "Which verse proves depression is from Shaytan?"
+    expect: {extracts_type: generalization}
+  - id: mh_005
+    answer: "Is depression proof that I'm a bad Muslim?"
+    expect: {extracts_type: generalization}
+  - id: mh_006
+    answer: "Maybe my depression means my iman is weak."
+    expect: {extracts_type: generalization}
+  - id: mh_007
+    answer: "You have depression."
+    expect: {extracts_type: diagnosis}
+  - id: mh_008
+    answer: "Based on what you describe, you have depression [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: mh_009
+    answer: "Depression equals sadness in Islamic teaching [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: mh_010
+    answer: "This dua is specifically prescribed for depression and will heal it [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: true}
+  - id: mh_011
+    answer: "Prayer cures mental illness [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: true}
+  - id: mh_012
+    answer: "This dua guarantees I'll recover."
+    expect: {extracts_type: guarantee}
+  - id: mh_013
+    answer: "There are authentic supplications asking Allah for relief from anxiety, grief, and distress, such as the one taught by the Prophet ﷺ: \"O Allah! I seek refuge in You from worry and grief\" [hadith:sahih-bukhari:6369]. I could not verify from the sources that a particular dua is described as a guaranteed cure for depression."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {supports_citation: hadith:sahih-bukhari:6369}
+  - id: mh_014
+    answer: "The Quran says anxiety is caused by weak faith [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}

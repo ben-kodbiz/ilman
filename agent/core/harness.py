@@ -400,9 +400,11 @@ class CompanionHarness:
                 citations = v2.verified_citations or citations
                 unsupported = v2.unsupported_citations
 
-        # EVIDENCE JUDGE (fixme_v3 §4): claim→evidence entailment on every
-        # claim sentence; verdicts feed the §16 language gate and the §13
-        # sufficiency state; failures trigger the §8 careful-scope fallback.
+        # EVIDENCE JUDGE (fixme_v3 §4 + v3.1 §31-33): claim→evidence
+        # entailment on every claim; typed verdicts feed the language gate;
+        # repair is BOUNDED (max 2 rounds §32) and ALWAYS re-validated —
+        # repair success is never assumed. The final answer gate (§33) is
+        # enforced before anything reaches the user.
         judgement = None
         if pack is not None and pack.passages and policy.requires_rag:
             judge = EvidenceJudge(embed=self._embed_fn())
@@ -412,44 +414,82 @@ class CompanionHarness:
             )
             trace.evidence_status = judgement.sufficiency.value
             trace.evidence_sufficiency = judgement.evidence_sufficiency
-            # §16: strong language only on SUPPORTS claims
-            lang_violations = language_strength_ok(text, judgement)
-            unsupported_claims = [
-                j for j in judgement.claim_support
-                if j.verdict in (Verdict.IRRELEVANT, Verdict.UNKNOWN)
-            ]
-            if lang_violations or unsupported_claims:
+            trace.validation_trace = [j.to_dict() for j in judgement.claim_support]
+
+            MAX_REPAIR_ROUNDS = 2  # v3.1 §32
+            for round_no in range(MAX_REPAIR_ROUNDS):
+                lang_violations = language_strength_ok(text, judgement)
+                unsupported_claims = [
+                    j for j in judgement.claim_support
+                    if j.verdict in (Verdict.IRRELEVANT, Verdict.UNKNOWN)
+                ]
+                if not lang_violations and not unsupported_claims:
+                    break  # clean; no repair needed
                 text = self._repair_entailment_failures(
                     text, judgement, lang_violations, policy, machine,
                 )
-                # re-judge after repair
+                # §31: repair must revalidate — claim extraction and judging
+                # run AGAIN on the repaired text; the loop exits either when
+                # clean or after the bounded rounds
                 judgement = judge.judge_answer(
                     text, pack, topic=plan.topic if plan else None,
                     requested_object=plan.requested_object if plan else None,
                 )
                 trace.evidence_status = judgement.sufficiency.value
                 trace.evidence_sufficiency = judgement.evidence_sufficiency
+                trace.notes.append(f"repair round {round_no + 1} revalidated")
+
+            # §33 FINAL ANSWER GATE: after bounded repair, any surviving
+            # high-risk unsupported claim forces the safe fallback — it may
+            # NEVER ship as part of a confident answer
+            survivors = [
+                j for j in judgement.claim_support
+                if j.verdict in (Verdict.IRRELEVANT, Verdict.UNKNOWN)
+                and j.is_high_risk
+            ]
+            if survivors:
+                text = self._careful_scope_fallback(judgement)
+                judgement = judge.judge_answer(
+                    text, pack, topic=plan.topic if plan else None,
+                    requested_object=plan.requested_object if plan else None,
+                )
+                trace.evidence_status = judgement.sufficiency.value
+                trace.notes.append(
+                    f"final gate: {len(survivors)} high-risk claims -> fallback"
+                )
+            trace.validation_trace = [j.to_dict() for j in judgement.claim_support]
         companion_v = self.validator.validate(
             text, policy, evidence_present=bool(pack is not None and pack.passages)
         )
         if not companion_v.ok:
-            # deterministic repairs for the worst classes
+            # deterministic repairs for the worst classes (v3.1 §31-33:
+            # bounded, revalidated; the final gate below enforces the §33
+            # checklist — a still-failing answer ships only de-fanged)
             text = self._repair_dependency(text)
             if companion_v.uncited_religious_claims:
                 text = self._strip_religious_claims(text)
+            if any("diagnosis" in p for p in companion_v.companion_problems):
+                text = self._strip_diagnosis_sentences(text)
+            if any("too many questions" in p for p in companion_v.policy_problems):
+                text = self._trim_extra_questions(text, policy)
             companion_v = self.validator.validate(
                 text, policy, evidence_present=bool(pack is not None and pack.passages)
             )
-            if not companion_v.ok and companion_v.uncited_religious_claims:
-                # still failing -> keep only the empathic opening + honest notice
+            if not companion_v.ok and (
+                companion_v.uncited_religious_claims
+                or any("diagnosis" in p for p in companion_v.companion_problems)
+            ):
+                # still failing -> keep only the empathic opening + notice
                 first_line = text.split("\n")[0][:200]
                 text = (
                     f"{first_line}\n\nI could not verify this from the approved "
                     "source corpus."
                 )
                 companion_v = self.validator.validate(
-                    text, policy, evidence_present=bool(pack is not None and pack.passages)
+                    text, policy,
+                    evidence_present=bool(pack is not None and pack.passages),
                 )
+
 
         # 9. bookkeeping + follow-up phase
         if "?" in text:
@@ -492,6 +532,10 @@ class CompanionHarness:
 
         if not passages:
             return passages
+        # ubiquitous stems carry no relevance signal (nearly every Islamic
+        # text contains allah/quran/prophet — overlap on those alone is
+        # indistinguishable from chance)
+        UBIQUITOUS = {"allah", "quran", "qur_a", "prophe", "messa", "hadit", "islam"}
         query_terms = set()
         for term in (plan.retrieval_terms if plan else []):
             query_terms |= _content_stems(term)
@@ -499,12 +543,15 @@ class CompanionHarness:
         for p in passages:
             text = (p.translation or p.arabic or "")
             p_stems = _content_stems(text)
-            overlap = len(query_terms & p_stems)
-            # passage must share at least one content stem with the planned
-            # need OR be a tier-0/1 reference hit (deterministic anchors)
+            overlap = len((query_terms & p_stems) - UBIQUITOUS)
+            # passage must share at least one DISCRIMINATIVE stem with the
+            # planned need OR be a tier-0/1 reference hit (deterministic anchors)
             if overlap >= 1 or p.leg == "reference":
                 kept.append(p)
-        return kept if kept else passages[:1]  # never drop everything
+        # fixme_v3.1 §4: if everything is irrelevant, NOTHING re-enters
+        # generation. Never deliberately reintroduce quarantined evidence.
+        # INSUFFICIENT_EVIDENCE propagates downstream instead.
+        return kept
 
     def _repair_entailment_failures(self, text, judgement, lang_violations,
                                     policy, machine) -> str:
@@ -603,6 +650,38 @@ class CompanionHarness:
     def _memory_pref(state) -> str:
         # guidance preference could live in long-term profile memory; default unknown
         return "unknown"
+
+    @staticmethod
+    def _strip_diagnosis_sentences(text: str) -> str:
+        """Remove sentences carrying diagnosis-like claims (§33: no
+        diagnosis ever ships)."""
+        from agent.validators.companion_validator import DIAGNOSIS_RE
+
+        out_lines = []
+        for paragraph in text.split("\n"):
+            kept = []
+            for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
+                if DIAGNOSIS_RE.search(sentence):
+                    continue
+                kept.append(sentence)
+            if kept:
+                out_lines.append(" ".join(kept))
+        return re.sub(r"\n{3,}", "\n\n", "\n".join(out_lines)).strip()
+
+    @staticmethod
+    def _trim_extra_questions(text: str, policy) -> str:
+        """§33 follow-up gate: keep only max_followups questions."""
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        kept = []
+        question_budget = max(getattr(policy, "max_followups", 1), 0)
+        for sentence in sentences:
+            if sentence.rstrip().endswith("?"):
+                if question_budget > 0:
+                    question_budget -= 1
+                    kept.append(sentence)
+                continue
+            kept.append(sentence)
+        return " ".join(kept)
 
     @staticmethod
     def _strip_citation_sentence(text: str, citation: str) -> str:

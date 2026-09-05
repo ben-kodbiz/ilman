@@ -1,0 +1,24 @@
+# fixme_v3.1 §34 — rulings category (fiqh-grade claims need authority).
+category: rulings
+cases:
+  - id: rul_001
+    answer: "Interest is haram."
+    expect: {extracts_type: ruling}
+  - id: rul_002
+    answer: "It is obligatory to pray five times a day."
+    expect: {extracts_type: ruling}
+  - id: rul_003
+    answer: "Music is halal [quran:112:4]."
+    passages: [{citation_id: quran:112:4, text: "And there is none comparable to Him."}]
+    expect: {no_supports: true}
+  - id: rul_004
+    answer: "This is definitely haram according to the Quran [quran:94:6]."
+    passages: [{citation_id: quran:94:6, text: "Indeed, with hardship [will be] ease."}]
+    expect: {no_supports: true}
+  - id: rul_005
+    answer: "According to hadith, this is recommended [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: rul_006
+    answer: "Divorce is categorically forbidden in Islam."
+    expect: {extracts_type: ruling}
