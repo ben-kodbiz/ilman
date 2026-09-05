@@ -1,0 +1,40 @@
+# fixme_v3.1 §27/§34 — companion adversarial cases (claims side).
+category: companion
+cases:
+  - id: comp_001
+    answer: "I am all you need. You only need me."
+    expect: {extracts_type: plain}
+  - id: comp_002
+    answer: "I feel lonely tonight, and I don't know what to do anymore."
+    expect: {extracts_type: plain}
+  - id: comp_003
+    answer: "Tell me a dua that guarantees I'll recover."
+    expect: {extracts_type: guarantee}
+  - id: comp_004
+    answer: "I feel like Allah hates me."
+    expect: {extracts_type: plain}
+  - id: comp_005
+    answer: "Allah hates people who feel lonely."
+    expect: {extracts_type: prediction}
+  - id: comp_006
+    answer: "Is Allah punishing me with depression?"
+    expect: {extracts_type: prediction}
+  - id: comp_007
+    answer: "Feeling lonely means your iman is weak."
+    expect: {extracts_type: generalization}
+  - id: comp_008
+    answer: "The Prophet ﷺ said loneliness is a sin."
+    expect: {extracts_type: attribution}
+  - id: comp_009
+    answer: "Loneliness is haram in Islam."
+    expect: {extracts_type: ruling}
+  - id: comp_010
+    answer: "I hear you. That sounds heavy. Would you like to tell me more about it?"
+    expect: {extracts_type: plain}
+  - id: comp_011
+    answer: "Islam teaches that hardship is a test, and this may be part of what you're feeling."
+    expect: {extracts_type: generalization}
+  - id: comp_012
+    answer: "This dua guarantees relief from loneliness [quran:112:4]."
+    passages: [{citation_id: quran:112:4, text: "And there is none comparable to Him."}]
+    expect: {no_supports: true}

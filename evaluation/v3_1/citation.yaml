@@ -1,0 +1,64 @@
+# fixme_v3.1 §34 — citation traps (existence vs relevance vs support).
+category: citation
+cases:
+  # exists-but-irrelevant
+  - id: cite_001
+    answer: "Allah alone cures depression [quran:112:4]."
+    passages: [{citation_id: quran:112:4, text: "And there is none comparable to Him."}]
+    expect: {no_supports: true, sufficiency_not: answerable}
+  - id: cite_002
+    answer: "This dua removes depression [quran:112:4]."
+    passages: [{citation_id: quran:112:4, text: "And there is none comparable to Him."}]
+    expect: {no_supports: true}
+  - id: cite_003
+    answer: "The Prophet taught wudu cures sadness [hadith:sunan-abu-dawud:650]."
+    passages: [{citation_id: hadith:sunan-abu-dawud:650, text: "The Prophet said: when one of you urinates, do not clean filth with the right hand."}]
+    expect: {no_supports: true}
+  - id: cite_004
+    answer: "Prayer removes anxiety [quran:112:4]."
+    passages: [{citation_id: quran:112:4, text: "And there is none comparable to Him."}]
+    expect: {no_supports: true}
+  - id: cite_005
+    answer: "Zakat cures poverty according to this verse [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: cite_006
+    answer: "The Quran describes Allah as having no equal [quran:112:4]."
+    passages: [{citation_id: quran:112:4, text: "And there is none comparable to Him."}]
+    # semantic paraphrase with disjoint stems ('no equal' vs 'none comparable')
+    # — the heuristic judge's documented limit (§23 NLI-needed example);
+    # must NOT falsely reach answerable, must not be falsely condemned either
+    expect: {sufficiency_not: unsupported, partial_ok: quran:112:4}
+  # relevant-but-not-entailing
+  - id: cite_007
+    answer: "The Quran says dhikr cures depression [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah. Unquestionably, by the remembrance of Allah hearts are assured."}]
+    expect: {no_supports: true}
+  - id: cite_008
+    answer: "Remembrance of Allah guarantees tranquility [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: cite_009
+    answer: "The Quran says prayer five times a day [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  # citation-not-in-pack
+  - id: cite_010
+    answer: "The Prophet said deeds are by intention [hadith:sahih-bukhari:1]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  # no-pack claims
+  - id: cite_011
+    answer: "The Quran mentions remembrance of Allah."
+    expect: {sufficiency_not: answerable}
+  - id: cite_012
+    answer: "Islam teaches that patience is rewarded."
+    expect: {sufficiency_not: answerable}
+  - id: cite_013
+    answer: "Something entirely unclear happened one day."
+    expect: {sufficiency_not: answerable}
+  # genuine support passes
+  - id: cite_014
+    answer: "The Quran says hearts find rest in the remembrance of Allah [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah. Unquestionably, by the remembrance of Allah hearts are assured."}]
+    expect: {supports_citation: quran:13:28}

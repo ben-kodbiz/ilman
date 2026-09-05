@@ -153,11 +153,21 @@ def plan_query(message: str, intent: str) -> QueryPlan:
     for modern, classical in MODERN_TO_CLASSICAL.items():
         if re.search(rf"\b{modern}\b", lowered):
             plan.retrieval_terms.extend(classical)
-    # dua requests always probe the actual supplication corpus — insert
-    # right after the raw query so the cap never drops it
+    # fixme_v3.1 §14-15: dua requests retrieve a CANDIDATE concept set,
+    # never one hard-coded dua as the answer. The planner proposes; the
+    # evidence layer (quarantine + judge) decides applicability.
     if plan.requested_object == "specific_dua":
         plan.retrieval_terms.insert(
             1, "O Allah I seek refuge in You from anxiety and grief"
         )
+        # additional distinct supplication contexts so no single dua is
+        # structurally privileged; the judge filters what applies
+        extra_candidates = [
+            "supplication for relief from hardship and distress",
+            "Prophet taught dua morning and evening remembrance",
+        ]
+        for term in extra_candidates:
+            if term not in plan.retrieval_terms:
+                plan.retrieval_terms.append(term)
     plan.retrieval_terms = plan.retrieval_terms[:9]
     return plan

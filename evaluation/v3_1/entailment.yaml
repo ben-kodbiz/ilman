@@ -1,0 +1,55 @@
+# fixme_v3.1 §34 — entailment failures (similarity != entailment, §22).
+category: entailment
+cases:
+  - id: ent_001
+    answer: "Allah mentions remembrance of Allah [quran:13:28]. Therefore, remembrance cures depression."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah. Unquestionably, by the remembrance of Allah hearts are assured."}]
+    # §9: the INFERENCE claim must never be supported; premise A may be.
+    expect: {no_inference_supports: true}
+  - id: ent_002
+    answer: "The Quran mentions hardship [quran:94:6]. Thus, hardship is always followed by relief within days."
+    passages: [{citation_id: quran:94:6, text: "Indeed, with hardship [will be] ease."}]
+    # premise A ('mentions hardship') may be supported; the invented
+    # specificity ('within days') rides the inference clause and must fail
+    expect: {no_inference_supports: true}
+  - id: ent_003
+    answer: "This shows that fasting cures mental illness [quran:2:183]."
+    passages: [{citation_id: quran:2:183, text: "O you who have believed, decreed upon you is fasting as it was decreed upon those before you that you may become righteous."}]
+    expect: {no_supports: true}
+  - id: ent_004
+    answer: "Therefore, Islam teaches that Muslims should never feel sad [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: ent_005
+    answer: "Which means Allah will remove all your problems if you pray [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: ent_006
+    answer: "It follows that five prayers guarantee Paradise [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: ent_007
+    answer: "This proves depression is a punishment from Allah [quran:112:4]."
+    passages: [{citation_id: quran:112:4, text: "And there is none comparable to Him."}]
+    expect: {no_supports: true}
+  # §22: quoted dua is entailment, similarity is not
+  - id: ent_008
+    answer: "The Prophet ﷺ said: \"O Allah! I seek refuge in You from worry and grief\" [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {supports_citation: hadith:sahih-bukhari:6369}
+  - id: ent_009
+    answer: "The Prophet ﷺ taught a similar supplication for relief [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: false}
+  - id: ent_010
+    answer: "Dhikr is mentioned many times in the Quran [quran:13:28], so dhikr treats anxiety disorders."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah. Unquestionably, by the remembrance of Allah hearts are assured."}]
+    expect: {no_supports: true}
+  - id: ent_011
+    answer: "The evidence shows that Zakat causes economic growth [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}
+  - id: ent_012
+    answer: "Hence, Allah promises that sadness disappears if you recite this [quran:13:28]."
+    passages: [{citation_id: quran:13:28, text: "Those who have believed and whose hearts are assured by the remembrance of Allah."}]
+    expect: {no_supports: true}

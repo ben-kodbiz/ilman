@@ -31,7 +31,7 @@ import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from agent.validators.claims import STRONG_CONNECTIVE_RE, Claim, extract_claims
+from agent.validators.claims import STRONG_CONNECTIVE_RE, Claim
 
 _SUPPORT_STOP = {
     "the", "a", "an", "and", "or", "of", "in", "on", "to", "is", "are", "was",
@@ -74,12 +74,22 @@ class ClaimJudgement:
     citation: str | None
     support_score: float = 0.0
     reason: str = ""
+    claim_type: str = ""           # fixme_v3.1 §7
+    requirement: str = ""          # §8 evidence requirement
+    citation_exists: bool = False  # §5.1
+    citation_relevant: bool = False  # §5.2 (topic-level relation)
+    dependency_on: str | None = None  # §9 inference premise
+    is_high_risk: bool = False       # §28 critical claim
 
     def to_dict(self) -> dict:
         return {
             "claim": self.claim[:120], "verdict": self.verdict.value,
             "citation": self.citation, "support": round(self.support_score, 2),
-            "reason": self.reason,
+            "reason": self.reason, "claim_type": self.claim_type,
+            "requirement": self.requirement,
+            "citation_exists": self.citation_exists,
+            "citation_relevant": self.citation_relevant,
+            "is_high_risk": self.is_high_risk,
         }
 
 
@@ -141,13 +151,28 @@ class EvidenceJudge:
     # ------------------------------------------------------------- judging
     def judge_answer(self, answer: str, pack, topic: str | None = None,
                      requested_object: str | None = None) -> EvidenceJudgement:
-        """Judge every claim in the answer against the pack (§4 pipeline)."""
-        claims = extract_claims(answer)
+        """Judge every claim in the answer against the pack (§4 pipeline).
+
+        fixme_v3.1 §7/§11/§12: claims are TYPED (claim_policy), each judged
+        independently; sufficiency is derived from claim-level results, not
+        an average — one unsupported high-risk claim forces repair (§28) and
+        caps the aggregate at PARTIALLY_ANSWERABLE at best.
+        """
+        from agent.validators.claim_policy import (
+            ClaimType,
+            TypedClaim,
+            extract_typed_claims,
+        )
+
+        typed: list[TypedClaim] = extract_typed_claims(answer)
+        claims = [c for c in typed if c.needs_evidence or c.has_citation]
         if not pack or not pack.passages:
             judgements = [
                 ClaimJudgement(
                     claim=c.sentence, verdict=Verdict.UNKNOWN, citation=None,
-                    reason="no evidence pack",
+                    reason="no evidence pack", claim_type=c.claim_type.value,
+                    requirement=c.requirement.value, dependency_on=c.dependency_on,
+                    is_high_risk=c.is_high_risk,
                 )
                 for c in claims
             ]
@@ -159,15 +184,25 @@ class EvidenceJudge:
 
         by_citation = {p.citation_id: p for p in pack.passages}
         judgements: list[ClaimJudgement] = []
-        support_scores: list[float] = []
 
         for claim in claims:
+            # §7 claim types that are NEVER allowed as assertions
+            if claim.claim_type is ClaimType.DIAGNOSIS:
+                judgements.append(ClaimJudgement(
+                    claim=claim.sentence, verdict=Verdict.IRRELEVANT,
+                    citation=None, reason="diagnosis is never allowed",
+                    claim_type=claim.claim_type.value,
+                    requirement=claim.requirement.value,
+                    is_high_risk=True,
+                ))
+                continue
+
             verdict = Verdict.UNKNOWN
             best_score = 0.0
             reason = ""
             citation = None
+            cited_exists = False
             if claim.citations:
-                # judge against the cited passage(s) specifically
                 for marker in claim.citations:
                     cid = _normalize_citation(marker)
                     passage = by_citation.get(cid)
@@ -175,8 +210,12 @@ class EvidenceJudge:
                         judgements.append(ClaimJudgement(
                             claim=claim.sentence, verdict=Verdict.IRRELEVANT,
                             citation=cid, reason="citation not in evidence pack",
+                            claim_type=claim.claim_type.value,
+                            requirement=claim.requirement.value,
+                            is_high_risk=claim.is_high_risk,
                         ))
                         continue
+                    cited_exists = True
                     v, s, r = self._judge_one(claim, passage, pack)
                     citation = citation or cid
                     if s > best_score:
@@ -187,30 +226,104 @@ class EvidenceJudge:
                 ):
                     continue
             else:
-                # uncited religious claim: judge against the WHOLE pack;
-                # if nothing entails it, it is unsupported
+                # §9: an inference-boundary claim is judged on its OWN; the
+                # fact that its premise was supported never carries over.
                 for passage in pack.passages:
                     v, s, r = self._judge_one(claim, passage, pack)
                     if s > best_score:
                         verdict, best_score, reason = v, s, r
-                citation = None
+
+            # §5.2 citation relevance (topic-level): does the claim's topic
+            # share content with the cited/best passage at all?
+            citation_relevant = best_score >= 0.25
+
+            # §8 claim-strength enforcement
+            verdict, reason = self._enforce_strength_policy(
+                claim, verdict, best_score, reason
+            )
             judgements.append(ClaimJudgement(
                 claim=claim.sentence, verdict=verdict, citation=citation,
                 support_score=best_score, reason=reason,
+                claim_type=claim.claim_type.value,
+                requirement=claim.requirement.value,
+                citation_exists=cited_exists,
+                citation_relevant=citation_relevant,
+                dependency_on=claim.dependency_on,
+                is_high_risk=claim.is_high_risk,
             ))
-            support_scores.append(best_score)
 
-        # aggregate sufficiency (§9/§13)
+        # §11/§12 sufficiency from CLAIM-LEVEL results, not averages
         if not claims:
             return EvidenceJudgement(Sufficiency.INSUFFICIENT_EVIDENCE, 0.0, [])
-        avg = sum(support_scores) / len(support_scores)
-        if avg >= 0.75 and all(s >= 0.5 for s in support_scores):
+        supported = [j for j in judgements if j.verdict is Verdict.SUPPORTS]
+        partial = [j for j in judgements if j.verdict is Verdict.PARTIAL]
+        bad = [
+            j for j in judgements
+            if j.verdict in (Verdict.IRRELEVANT, Verdict.UNKNOWN)
+        ]
+        high_risk_bad = [j for j in bad if j.is_high_risk]
+        if bad or high_risk_bad:
+            # any unsupported claim — high-risk ones especially — forces
+            # at most PARTIALLY_ANSWERABLE (repair path decides removal)
+            suff = (
+                Sufficiency.PARTIALLY_ANSWERABLE
+                if (supported or partial) and not high_risk_bad
+                else Sufficiency.INSUFFICIENT_EVIDENCE
+            )
+        elif partial and supported:
+            suff = Sufficiency.PARTIALLY_ANSWERABLE
+        elif supported:
             suff = Sufficiency.ANSWERABLE
-        elif avg >= 0.4:
+        elif partial:
             suff = Sufficiency.PARTIALLY_ANSWERABLE
         else:
             suff = Sufficiency.INSUFFICIENT_EVIDENCE
+        avg = (
+            sum(j.support_score for j in judgements) / len(judgements)
+            if judgements else 0.0
+        )
         return EvidenceJudgement(suff, avg, judgements)
+
+    def _enforce_strength_policy(self, claim, verdict: Verdict,
+                                 score: float, reason: str) -> tuple[Verdict, str]:
+        """fixme_v3.1 §8: claim type -> minimum evidence bar. Nothing can be
+        SUPPORTS below its type's bar; GUARANTEE/RULING need the strongest
+        support, INFERENCE must be labeled as inference (never asserted)."""
+        from agent.validators.claim_policy import (
+            ClaimType,
+        )
+
+        if verdict is not Verdict.SUPPORTS:
+            return verdict, reason
+        ctype: ClaimType = claim.claim_type
+        if ctype is ClaimType.GUARANTEE:
+            # §8: guarantee needs VERY_STRONG (near-verbatim) support
+            if score < 0.8:
+                return Verdict.PARTIAL, (
+                    f"guarantee claim needs very strong support (score {score:.2f})"
+                )
+        elif ctype in (ClaimType.RULING, ClaimType.ATTRIBUTION):
+            if score < 0.7:
+                return Verdict.PARTIAL, (
+                    f"{ctype.value} needs an exact authoritative source "
+                    f"(score {score:.2f})"
+                )
+        elif ctype is ClaimType.CAUSAL_CLAIM:
+            if score < 0.75:
+                return Verdict.PARTIAL, (
+                    f"causal claim needs direct evidence (score {score:.2f})"
+                )
+        elif ctype is ClaimType.PREDICTION:
+            return Verdict.PARTIAL, (
+                "predictions may never be religious certainty"
+            )
+        elif ctype is ClaimType.INFERENCE:
+            # §8: inference must be LABELLED as inference; an asserted
+            # 'therefore X' that the sources don't state cannot be SUPPORTS
+            return Verdict.PARTIAL, (
+                "inference: allowed only as explicitly labeled reflection"
+            )
+        return verdict, reason
 
     # --------------------------------------------------------- one claim×passage
     def _judge_one(self, claim: Claim, passage, pack) -> tuple[Verdict, float, str]:
@@ -249,10 +362,38 @@ class EvidenceJudge:
         type_fit = self._type_fit(claim_text, text)
 
         # aggregate score
+        # §22 (v3.1): semantic similarity is ONE signal, never entailment
+        # alone — but a paraphrase with zero lexical overlap to its source
+        # ("no equal" vs "none comparable") IS legitimately semantic. For
+        # SHORT claims (paraphrase-scale) the cosine above 0.55 is strong
+        # evidence of restatement; long claims still need lexical corroboration.
+        sem_component = max(sem - 0.4, 0.0) * 0.5
+        if len(claim_text.split()) <= 14 and sem >= 0.55:
+            sem_component = max(sem_component, (sem - 0.45) * 1.6)
+            # whole-passage paraphrase (§22-safe): a SHORT claim restating a
+            # SHORT passage needs BOTH near-similarity AND the passage's own
+            # key stems present in the claim — 'no equal'/'none comparable'
+            # share the stem family 'none/equal-compa'... which fails, so
+            # ALSO accept the semantic route ONLY when the passage is fully
+            # covered: every key stem of the PASSAGE appears in the CLAIM.
+            # 'depression weak faith' vs 'hearts remembrance' share nothing,
+            # so topical false-matches cannot ride this path.
+            if len(text.split()) <= 16 and sem >= 0.60:
+                passage_key = [t for t in passage_stems if len(t) >= 5]
+                if passage_key:
+                    covered = sum(1 for t in passage_key if t in claim_stems) / len(passage_key)
+                    if covered >= 0.5:  # claim covers >= half the passage's stems
+                        prelim = (
+                            (1.0 if quote_match else 0.0) * 0.45
+                            + min(overlap_ratio * 1.6, 1.0) * 0.3 + sem_component
+                        )
+                        return Verdict.SUPPORTS, max(prelim, 0.72), (
+                            "short-passage paraphrase (semantic + stem coverage)"
+                        )
         score = (
             (1.0 if quote_match else 0.0) * 0.45
             + min(overlap_ratio * 1.6, 1.0) * 0.3
-            + max(sem - 0.4, 0.0) * 0.5  # cosine above ~0.4 starts to matter
+            + sem_component
         )
         if not type_fit:
             score *= 0.35  # type mismatch caps support hard
@@ -268,10 +409,25 @@ class EvidenceJudge:
             / max(len(claim_key_terms), 1)
         )
         if claim_key_terms and key_coverage >= 0.6:
+            # enumerated-content support: a passage LISTS items and the claim
+            # restates those items — key coverage of 2/3 or more is strong
+            # evidence the claim derives from this passage (0.667*0.3+0.4=0.6;
+            # 0.8 coverage -> 0.64; attributions need the strong-language bar
+            # cleared too). A 0.8+ claim-side key coverage on a claim whose
+            # citation points here is effectively a paraphrased enumeration.
             score = max(score, 0.4 + 0.3 * key_coverage)
+            if key_coverage >= 0.66 and overlap_ratio >= 0.5:
+                score = max(score, 0.72)
 
-        # strong language demands strong evidence (§16)
-        if claim.uses_strong_language and score < 0.7:
+        # strong language demands strong evidence (§16 v3 / §8 v3.1):
+        # high-risk claim types use the STRONG_CONNECTIVE vocabulary as the
+        # proxy for assertive phrasing
+        uses_strong_language = getattr(claim, "uses_strong_language", None)
+        if uses_strong_language is None:
+            from agent.validators.claims import STRONG_CONNECTIVE_RE
+
+            uses_strong_language = bool(STRONG_CONNECTIVE_RE.search(claim_text))
+        if uses_strong_language and score < 0.7:
             return Verdict.PARTIAL if score >= 0.45 else Verdict.IRRELEVANT, score, (
                 "strong claim language with weak support"
             )
@@ -316,24 +472,52 @@ class EvidenceJudge:
         return passage_about_distress
 
 
-# --------------------------------------------------------------- §16 gate
+# --------------------------------------------------------------- §24 gate
+# v3.1 §24: verdict -> allowed phrasing. Strong assertive language is gated
+# by verdict; each verdict tier has its allowed sentence openers.
+VERDICIDAL_OPENERS = {
+    # SUPPORTS -> direct attribution allowed
+    "supports": [],
+    # PARTIAL -> qualified language only
+    "partial": ["may indicate", "may suggest", "can provide context",
+                "some people find", "one understanding is", "this may reflect"],
+    # BACKGROUND -> context framing only
+    "background": ["provides context", "for background"],
+    # UNKNOWN -> uncertainty only
+    "unknown": ["I could not verify"],
+}
+
 QUALIFIER_WORDS = re.compile(
     r"\b(may|might|can\s+be|often|some|many|one\s+way|part\s+of|alongside|"
-    r"not\s+a\s+guarantee|helps\s+many|find\s+comfort)\b",
+    r"not\s+a\s+guarantee|helps\s+many|find\s+comfort|may\s+indicate|"
+    r"may\s+suggest|some\s+people|one\s+understanding|provides\s+context|"
+    r"could\s+not\s+verify)\b",
+    re.IGNORECASE,
+)
+
+# assertive language forms that need the highest verdict to be allowed (§24)
+ASSERTIVE_FORMS = re.compile(
+    r"\b(the\s+quran\s+(says|proves|states)|islam\s+teaches|"
+    r"allah\s+(will|alone|says|promises)|the\s+prophet\s+(taught|said)|"
+    r"this\s+(cures|guarantees|proves)|this\s+is\s+definitely)\b",
     re.IGNORECASE,
 )
 
 
 def language_strength_ok(answer: str, judgement: EvidenceJudgement) -> list[str]:
-    """§16: evidence strength -> allowed language strength. Returns the list
-    of violations (strong language on non-SUPPORTS claims)."""
+    """v3.1 §24: evidence strength -> allowed language strength.
+
+    Strong assertive religious phrasing is only allowed on SUPPORTS claims;
+    PARTIAL/BACKGROUND/UNKNOWN claims must carry qualifier hedges. Returns
+    the list of violations."""
     violations: list[str] = []
     for j in judgement.claim_support:
         if j.verdict is Verdict.SUPPORTS:
             continue
-        if STRONG_CONNECTIVE_RE.search(j.claim):
-            # strong connective — allowed only with a qualifying hedge
-            # nearby in the same claim sentence
+        strong = STRONG_CONNECTIVE_RE.search(j.claim) or ASSERTIVE_FORMS.search(j.claim)
+        if strong:
             if not QUALIFIER_WORDS.search(j.claim):
-                violations.append(f"strong language on {j.verdict.value} claim: {j.claim[:90]}")
+                violations.append(
+                    f"strong language on {j.verdict.value} claim: {j.claim[:90]}"
+                )
     return violations

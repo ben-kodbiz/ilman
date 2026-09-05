@@ -1,0 +1,35 @@
+# fixme_v3.1 §34 — attribution failures (grade/scholar/hadith misuse).
+category: attribution
+cases:
+  - id: attr_001
+    answer: "Al-Albani graded this Sahih [hadith:sahih-bukhari:1]."
+    passages: [{citation_id: hadith:sahih-bukhari:1, text: "Narrated Umar: The Prophet said: deeds are by intention."}]
+    expect: {no_supports: true}
+  - id: attr_002
+    answer: "The Prophet ﷺ taught this dua for distress [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: false}
+  - id: attr_003
+    answer: "The Prophet ﷺ said: whoever smiles, it is charity [hadith:sahih-bukhari:6369]."
+    passages: [{citation_id: hadith:sahih-bukhari:6369, text: "Allah's Messenger used to seek refuge saying: \"O Allah! I seek refuge in You from worry and grief, from incapacity and laziness.\""}]
+    expect: {no_supports: true}
+  - id: attr_004
+    answer: "Sahih Muslim 112 was compiled by Imam Malik [hadith:sahih-muslim:112]."
+    passages: [{citation_id: hadith:sahih-muslim:112, text: "It is narrated on the authority of Abdullah son of Umar, that the Prophet said: The superstructure of al-Islam is raised on five pillars."}]
+    expect: {no_supports: true}
+  - id: attr_005
+    answer: "Imam Bukhari graded this hadith as authentic himself [hadith:sahih-muslim:112]."
+    passages: [{citation_id: hadith:sahih-muslim:112, text: "It is narrated on the authority of Abdullah son of Umar, that the Prophet said: The superstructure of al-Islam is raised on five pillars."}]
+    expect: {no_supports: true}
+  - id: attr_006
+    answer: "The Prophet ﷺ said the five pillars are: worship of Allah alone, prayer, zakat, pilgrimage, and the fast of Ramadan [hadith:sahih-muslim:112]."
+    passages: [{citation_id: hadith:sahih-muslim:112, text: "The superstructure of al-Islam is raised on five pillars, i.e. Allah alone should be worshipped, prayer should be offered, zakat should be paid, the fast of Ramadan should be observed and pilgrimage to the House should be performed."}]
+    expect: {supports_citation: hadith:sahih-muslim:112}
+  - id: attr_007
+    answer: "The Prophet ﷺ said there are six pillars of Islam [hadith:sahih-muslim:112]."
+    passages: [{citation_id: hadith:sahih-muslim:112, text: "The superstructure of al-Islam is raised on five pillars, i.e. Allah alone should be worshipped, prayer should be offered, zakat should be paid."}]
+    expect: {no_supports: true}
+  - id: attr_008
+    answer: "Tafsir Ibn Kathir explains this verse was revealed in Medina [tafsir-en:tafsir_sadi_en_001_5e91edb1_00131]."
+    passages: [{citation_id: tafsir-en:tafsir_sadi_en_001_5e91edb1_00131, text: "2:153. O you who believe, seek help through patience and prayer. Indeed Allah is with the patient."}]
+    expect: {no_supports: true}
