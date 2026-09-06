@@ -25,12 +25,14 @@ class ChatMessage:
     role: str
     content: str = ""
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    tool_call_id: str = ""  # set on role="tool" result messages
 
 
 @dataclass
 class ToolCall:
     name: str
     arguments: dict[str, Any]
+    id: str = ""  # backend tool_call id; tool results must reference it
 
     @classmethod
     def from_openai(cls, raw: dict[str, Any]) -> ToolCall:
@@ -41,7 +43,7 @@ class ToolCall:
                 args = json.loads(args)
             except json.JSONDecodeError:
                 args = {"_raw": args}
-        return cls(name=fn.get("name", ""), arguments=args)
+        return cls(name=fn.get("name", ""), arguments=args, id=raw.get("id") or "")
 
 
 @dataclass
@@ -79,6 +81,8 @@ class ModelBackend:
                     "role": m.role,
                     "content": m.content,
                     **({"tool_calls": m.tool_calls} if m.tool_calls else {}),
+                    # tool results must reference the assistant's tool_call id
+                    **({"tool_call_id": m.tool_call_id} if m.role == "tool" and m.tool_call_id else {}),
                 }
                 for m in messages
             ],

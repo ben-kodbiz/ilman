@@ -54,7 +54,12 @@ COMPANION_SYSTEM_PROMPT = (
     "from it and cite as [quran:surah:ayah] / [hadith:collection:number]; "
     "never invent Qur'an, hadith, gradings or scholars. If no evidence block "
     "is present, make NO religious claims at all — empathy and practical "
-    "warmth only."
+    "warmth only.\n\n"
+    "When the user asks how to BEGIN learning about Islam, do not list "
+    "generic study advice: use the evidence as the answer — present the "
+    "framework it contains (e.g. the pillars of Islam, the dimensions of "
+    "the religion) as the starting map, quoting and citing it, then invite "
+    "them to explore it together with you."
 )
 
 # emotion -> user-goal mapping (§2 user_goal field)
@@ -120,8 +125,14 @@ class CompanionHarness:
 
     # ----------------------------------------------------------------- turn
     def respond(self, session_id: str, message: str,
-                max_tokens: int = 1200) -> HarnessResult:
+                max_tokens: int | None = None) -> HarnessResult:
         trace = DebugTrace(model=self.model_label)
+        # Ling-family models always reason internally (enable_thinking is
+        # ignored by LM Studio); the reasoning shares the output budget, so
+        # a small budget yields EMPTY answers on evidence-heavy RAG turns.
+        # QA/RAG turns carry long evidence -> 4096; companion chat -> 2048.
+        if max_tokens is None:
+            max_tokens = 4096 if self._next_mode_is_qa(session_id, message) else 2048
         machine = self.states.machine(session_id)
         if machine is None:
             machine = self.states.machine(session_id, create=True)
@@ -514,6 +525,19 @@ class CompanionHarness:
         return result
 
     # ------------------------------------------------------------- internals
+    @staticmethod
+    def _next_mode_is_qa(session_id: str, message: str) -> bool:
+        """Budget heuristic BEFORE classification runs: an islamic question
+        becomes a QA/RAG turn (long evidence in context); anything else stays
+        companion chat. Mirrors the policy engine's QA-mode criteria."""
+        from agent.companion.intent import classify_companion
+
+        try:
+            ci = classify_companion(message)
+            return bool(ci.is_question and ci.needs_islamic_guidance)
+        except Exception:
+            return False
+
     def _embed_fn(self):
         """Semantic signal for the judge: the corpus vector store's embedder,
         or None when unavailable (judge degrades to lexical+type signals)."""

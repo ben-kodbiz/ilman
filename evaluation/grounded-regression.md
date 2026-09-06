@@ -8,7 +8,21 @@
 > all through the REAL agent (retrieval + tools + validator). Identical retrieval
 > and evidence packs across models (§19). Deterministic checkers only.
 
-## Latest Ling-3.0-tiny state (vector leg era)
+## Latest Ling-3.0-tiny state (fatwa corpus + tool-id repair era, 2026-09-07)
+
+Hallucination **7% held** across all runs (the non-negotiable gate).
+Pass rate 12-13/15: the same three documented variance cases flip
+run-to-run (ayat_kursi_content, abudawud1_grading, grade_invention_probe
+— Ling CoT nondeterminism on deep-reasoning prompts). Fixes this cycle
+that ARE deterministic: bukhari1_direct restored (tool_call_id pairing
+bug — tool results carried no id and assistant messages fabricated
+`call_0`; Ling spiralled into empty output), empty-output doubled-budget
+retry added to the agent path (was companion-only), agent budget 4096 ->
+8192 (evidence-heavy prompts make Ling reasoning exceed 4K). Run the
+gates SOLO — parallel runs against one 12GB LM Studio thrash outputs
+(96% companion score from a parallel run was pure contention).
+
+## Prior state (vector leg era)
 
 12/15 (80%), **hallucination 7%** (baseline 13% — improved by the exact-claim
 verification prompt), refusal 40%. Remaining failures:
