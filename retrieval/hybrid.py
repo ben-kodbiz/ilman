@@ -23,7 +23,7 @@ SURAH_ONLY_RE = re.compile(
 # Which leg's passage object to keep when a citation appears in several legs.
 # Lower = richer/more authoritative: reference > translation/hadith > tafsir > fts.
 _LEG_PRIORITY = {"reference": 0, "translation": 1, "hadith": 1, "tafsir": 2,
-                 "vector": 2, "fts": 2, "fusion": 3}
+                 "vector": 2, "fts": 2, "web_fatwa": 3, "fusion": 3}
 
 
 @dataclass
@@ -46,12 +46,13 @@ class RetrievedPassage:
 class RetrievalOrchestrator:
     def __init__(self, store: QuranStore, policy: SourcePolicy | None = None,
                  hadith_store=None, tafsir_store=None, tafsir_en_store=None,
-                 vector_store=None):
+                 web_fatwa_store=None, vector_store=None):
         self.store = store
         self.policy = policy or SourcePolicy(SourceRegistry.load())
         self.hadith_store = hadith_store
         self.tafsir_store = tafsir_store
         self.tafsir_en_store = tafsir_en_store
+        self.web_fatwa_store = web_fatwa_store
         self.vector_store = vector_store
 
     def _has_translation(self, lang: str = "en") -> bool:
@@ -189,7 +190,26 @@ class RetrievalOrchestrator:
                     )
                 )
             tafsir_hits.extend(en_tafsir_hits)
-        # Leg 6: vector/semantic (§8 — never vector search ALONE, but vector
+        # Leg 6: web fatwas (TIER 4, contemporary scholarship). English FTS
+        # only — these are English answers; skipped for semantic_only queries
+        # (lexical matches are noise for emotional statements).
+        web_fatwa_hits: list[RetrievedPassage] = []
+        if (
+            not semantic_only
+            and self.web_fatwa_store is not None
+            and self._is_latin(query)
+            and self._web_fatwa_corpus_present()
+        ):
+            for w in self.web_fatwa_store.search_fts(query, limit=limit):
+                web_fatwa_hits.append(
+                    RetrievedPassage(
+                        citation_id=w["citation_id"], surah=0, ayah=0,
+                        arabic="", source_id=w["source_id"], tier=4,
+                        leg="web_fatwa", score=w["rank"],
+                        translation=w["body"], scholar=w["scholar"],
+                    )
+                )
+        # Leg 7: vector/semantic (§8 — never vector search ALONE, but vector
         # search bridges vocabulary gaps: 'I am lonely' -> 2:186 'I am near').
         # Hits resolve to full passages via the corpus stores so tier and
         # provenance stay intact; then the same §8 filter applies.
@@ -198,7 +218,8 @@ class RetrievalOrchestrator:
             try:
                 seen_cids = {
                     p.citation_id
-                    for leg in (ref_hits, fts_hits, translation_hits, hadith_hits, tafsir_hits)
+                    for leg in (ref_hits, fts_hits, translation_hits, hadith_hits,
+                                tafsir_hits, web_fatwa_hits)
                     for p in leg
                 }
                 if semantic_only:
@@ -239,7 +260,8 @@ class RetrievalOrchestrator:
                 vector_hits = []
         # Fusion: RRF over all legs; exact-reference hits always survive
         fused = self._rrf(
-            [ref_hits, fts_hits, translation_hits, hadith_hits, tafsir_hits, vector_hits], k=60
+            [ref_hits, fts_hits, translation_hits, hadith_hits, tafsir_hits,
+             web_fatwa_hits, vector_hits], k=60
         )
         # Mandatory source filter (§8) — every passage must pass
         filtered = [p for p in fused if self._filter_passes(p)]
@@ -293,6 +315,17 @@ class RetrievalOrchestrator:
                             citation_id=cid, surah=int(s), ayah=int(a),
                             arabic="", source_id=source, tier=2,
                             leg="vector", score=hit["score"], translation=row["tafsir"],
+                        )
+            elif cid.startswith("webfatwa:"):
+                answer_id = cid.rsplit(":", 1)[1]
+                if self.web_fatwa_store:
+                    row = self.web_fatwa_store.get_fatwa(answer_id)
+                    if row:
+                        return RetrievedPassage(
+                            citation_id=cid, surah=0, ayah=0,
+                            arabic="", source_id=row["source_id"], tier=4,
+                            leg="vector", score=hit["score"],
+                            translation=row["body"], scholar=row["scholar"],
                         )
         except (ValueError, KeyError):
             return None
@@ -348,6 +381,12 @@ class RetrievalOrchestrator:
     def _tafsir_en_corpus_present(self) -> bool:
         try:
             return self.tafsir_en_store.chunk_count() > 0
+        except Exception:
+            return False
+
+    def _web_fatwa_corpus_present(self) -> bool:
+        try:
+            return self.web_fatwa_store.fatwa_count() > 0
         except Exception:
             return False
 

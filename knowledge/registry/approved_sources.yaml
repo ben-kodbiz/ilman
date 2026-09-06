@@ -306,6 +306,35 @@ sources:
       knowledge/tafsir/raw/kemenag-tafsir.json.tar.gz
       sha256=ca31b41c34a285d1671fef0131852d405eafccf3c1f4c674b71406deb6cdc799.
 
+  # ---- Web fatwa collections (harvested from public Sunni fatwa sites) ----
+  # Owner-approved 2026-09-06. IslamQA.info is the fatwa site of Sheikh
+  # Muhammad Saalih al-Munajjid (Riyadh), supervised by the Zad Foundation;
+  # Sunni, widely referenced worldwide. English answers are his own
+  # contemporary scholarship (TIER 4), NOT primary revelation.
+
+  - id: islamqa-info-en
+    title: "IslamQA.info English Fatwas"
+    author: "Sheikh Muhammad Saalih al-Munajjid"
+    type: contemporary
+    language: en
+    tradition: SUNNI
+    school: ""
+    publisher: "islamqa.info (Zad Foundation)"
+    edition: "English answers, harvested 2026-09-06"
+    license: "Public fatwa site; content used for private local study (site terms permit personal reading; redistribution not granted)"
+    url: "https://islamqa.info/en"
+    verification_status: verified
+    allowed: true
+    notes: >-
+      TIER 4 (contemporary scholarship). English fatwa answers harvested
+      from the public site via topic-category listings (polite crawl,
+      2026-09-06). Each answer is Sheikh al-Munajjid's response to a
+      question: contemporary scholarly opinion grounded in Qur'an and
+      Sunnah — always subordinate to TIER 0-2 sources; a fatwa never
+      overrides Qur'an/hadith/tafsir. Private local study only —
+      publication/redistribution blocked (§21). Harvested files:
+      knowledge/web/raw/islamqa_en/<id>.json per answer + index.json.
+
   - id: translation-kemenag-id
     title: "Qur'an Indonesian translation (Kemenag)"
     author: "Kementerian Agama Republik Indonesia"

@@ -40,6 +40,7 @@ from ingestion.hadith_ingest import KUTUB_AL_SITTAH, HadithStore
 from ingestion.quran_ingest import DEFAULT_DB, QuranStore
 from ingestion.tafsir_en_ingest import TafsirEnStore
 from ingestion.tafsir_ingest import TafsirStore
+from ingestion.web_fatwa_ingest import WebFatwaStore
 from retrieval.hybrid import RetrievalOrchestrator
 from retrieval.vector_store import VectorStore
 
@@ -76,6 +77,11 @@ try:
     TAFSIR_EN_COUNT = TAFSIR_EN_STORE.chunk_count()
 except Exception:
     TAFSIR_EN_COUNT = 0
+WEB_FATWA_STORE = WebFatwaStore()
+try:
+    WEB_FATWA_COUNT = WEB_FATWA_STORE.fatwa_count()
+except Exception:
+    WEB_FATWA_COUNT = 0
 try:
     VECTOR_STORE = VectorStore()
     _ = VECTOR_STORE.size  # loads cache; 0 when missing
@@ -86,6 +92,7 @@ ORCHESTRATOR = RetrievalOrchestrator(
     hadith_store=HADITH_STORE if HADITH_COUNT else None,
     tafsir_store=TAFSIR_STORE if TAFSIR_COUNT else None,
     tafsir_en_store=TAFSIR_EN_STORE if TAFSIR_EN_COUNT else None,
+    web_fatwa_store=WEB_FATWA_STORE if WEB_FATWA_COUNT else None,
     vector_store=VECTOR_STORE if (VECTOR_STORE and VECTOR_STORE.size) else None,
 )
 MEMORY = CompanionMemory()
@@ -146,6 +153,7 @@ def health() -> dict:
         "hadiths": HADITH_COUNT,
         "tafsir_entries": TAFSIR_COUNT,
         "classic_tafsir_chunks": TAFSIR_EN_COUNT,
+        "web_fatwas": WEB_FATWA_COUNT,
         "vector_index_size": VECTOR_STORE.size if VECTOR_STORE else 0,
         "answer_backend": "model" if PIPELINE else "unavailable",
     }

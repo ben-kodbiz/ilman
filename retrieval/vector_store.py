@@ -69,6 +69,10 @@ class VectorStore:
             selects.append("SELECT citation_id, tafsir FROM tafsir")
         if "tafsir_en" in tables:
             selects.append("SELECT 'tafsir-en:' || chunk_id, text FROM tafsir_en")
+        if "web_fatwas" in tables:
+            selects.append(
+                "SELECT citation_id, COALESCE(NULLIF(title,'') || ' ', '') || body FROM web_fatwas"
+            )
         if not selects:
             return
         rows = con.execute(" UNION ALL ".join(selects) + " ORDER BY 1")
@@ -99,9 +103,11 @@ class VectorStore:
                 parts.append("(SELECT COUNT(*) FROM tafsir)")
             if "tafsir_en" in tables:
                 parts.append("(SELECT COUNT(*) FROM tafsir_en)")
+            if "web_fatwas" in tables:
+                parts.append("(SELECT COUNT(*) FROM web_fatwas)")
             if not parts:
                 return 0
-            return con.execute(" + ".join(parts)).fetchone()[0]
+            return con.execute("SELECT " + " + ".join(parts)).fetchone()[0]
         finally:
             if own:
                 con.close()

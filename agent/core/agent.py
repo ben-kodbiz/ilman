@@ -40,6 +40,7 @@ class AgentTrace:
     tool_calls: list[dict] = field(default_factory=list)  # name + args + ok
     retrieved_citations: list[str] = field(default_factory=list)
     rounds: int = 0
+    notes: list[str] = field(default_factory=list)  # decision provenance only
 
     def to_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -185,12 +186,20 @@ class AgentOrchestrator:
         # contains tool results with citations outside the pack, and a repair
         # appended to that context makes the model mix both citation sets.
         validation = self.validator.validate(final_text, pack)
-        if validation.unsupported_citations or validation.misattributed_grades:
+        if validation.unsupported_citations or validation.misattributed_grades \
+                or validation.misquoted_citations:
             problem_lines = []
             if validation.unsupported_citations:
                 problem_lines.append(
                     f"- These citations are NOT in the evidence and must be removed: "
                     f"{validation.unsupported_citations}"
+                )
+            for mq in validation.misquoted_citations:
+                problem_lines.append(
+                    f"- The quoted text does not match {mq['citation']} (it shares only "
+                    f"{', '.join(mq['overlap'])} with that verse). Do NOT assert that "
+                    f"verse as the source of the quote. If the exact quote does not "
+                    f"appear in the evidence, say it cannot be verified."
                 )
             for mg in validation.misattributed_grades:
                 problem_lines.append(
@@ -219,6 +228,18 @@ class AgentOrchestrator:
             if resp.content.strip():
                 final_text = resp.content
                 validation = self.validator.validate(final_text, pack)
+
+        # 4b. Final quote-identification gate (fixme_v3.1 §44): a fabricated
+        # quote confirmed against a merely similar verse must NEVER ship,
+        # even if the model ignored the repair instruction. When a
+        # quote-identification misquote survives repair, the honest notice is
+        # the only acceptable answer — less claim, more transparency.
+        if validation.misquoted_citations:
+            final_text = UNVERIFIABLE_NOTICE
+            validation = self.validator.validate(final_text, pack)
+            trace.notes.append(
+                "final gate: quote-identification misquote survived repair -> notice"
+            )
 
         refused = UNVERIFIABLE_NOTICE in final_text
         verified = validation.ok and (validation.had_any_citation or refused)

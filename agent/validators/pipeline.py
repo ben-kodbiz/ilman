@@ -25,8 +25,9 @@ CITATION_RE = re.compile(
     r"|\bhadith:([a-z0-9\-]+):(\d+)\b"
     r"|\btafsir:([a-z0-9\-]+):(\d{1,3}):(\d{1,3})\b"
     r"|\btafsir-en:([a-z0-9_\-]+)\b"
+    r"|\bwebfatwa:([a-z0-9\-]+):([a-z0-9\-]+)\b"
     # bare bracketed collection:number form the models often emit;
-    # ONLY accepted when it resolves to a pack citation (groups 11/12)
+    # ONLY accepted when it resolves to a pack citation (groups 13/14)
     r"|\[([a-z0-9\-]+):(\d+)\](?![\w:])"
 )
 
@@ -71,6 +72,16 @@ class EvidencePack:
                 lines.append(
                     f"[{p.citation_id}] ({label}{scholar if not p.scholar else ''}; "
                     "interpretation, TIER 2 — present as tafsir, never as Qur'an text)\n"
+                    f"{_trim(p.translation)}"
+                )
+            elif p.citation_id.startswith("webfatwa:"):
+                # TIER 4 contemporary fatwa — scholarly opinion, present as
+                # such, never as Qur'an/hadith text or infallible ruling
+                lines.append(
+                    f"[{p.citation_id}] (Fatwa by {p.scholar or 'Sheikh al-Munajjid'}, "
+                    "islamqa.info; contemporary scholarly opinion, TIER 4 — "
+                    "present as a fatwa/ruling opinion, subordinate to "
+                    "Qur'an and hadith; never quote as revelation)\n"
                     f"{_trim(p.translation)}"
                 )
             else:
@@ -334,9 +345,17 @@ class CitationValidator:
                 elif citation not in unsupported:
                     unsupported.append(citation)
                 continue
-            elif m.group(11):  # bare [collection:number] bracket form:
+            elif m.group(11):  # webfatwa:source:answer_id form
+                citation = f"webfatwa:{m.group(11)}:{m.group(12)}"
+                if citation in allowed:
+                    if citation not in verified:
+                        verified.append(citation)
+                elif citation not in unsupported:
+                    unsupported.append(citation)
+                continue
+            elif m.group(13):  # bare [collection:number] bracket form:
                 # accepted ONLY when it resolves to a pack hadith citation
-                bare = f"hadith:{m.group(11)}:{m.group(12)}"
+                bare = f"hadith:{m.group(13)}:{m.group(14)}"
                 if bare in allowed:
                     if bare not in verified:
                         verified.append(bare)
@@ -369,10 +388,89 @@ class CitationValidator:
         # §4-5) — the old single-sentence stem heuristic was cruder and
         # over-stripped legitimate quoted-dua answers. The judge is the single
         # entailment authority; misquoted_citations stays for API compat.
-        misquoted = []
+        misquoted = _check_quote_identification(answer, pack)
         return ValidationResult(
             verified, unsupported, found_any, misattributed, misquoted
         )
+
+
+_QUOTED_SPAN_RE = re.compile(r"""["'""'']{1,3}(.+?)["'""'']{1,3}""", re.S)
+_IDENTIFY_RE = re.compile(
+    r"\b(which|what)\s+(surah|ayah|verse|chapter|reference|hadith|narration)\b"
+    r"|\bgive\s+(me\s+)?the\s+exact\s+reference\b"
+    r"|\bwhere\s+(is|does)\b",
+    re.IGNORECASE,
+)
+
+
+def _content_words(text: str) -> set[str]:
+    """Lowercased, stopword-free content words (English; Arabic passes through)."""
+    stop = {"the", "a", "an", "and", "of", "in", "is", "are", "was", "were", "to",
+            "he", "she", "it", "they", "his", "her", "its", "this", "that", "will",
+            "be", "for", "on", "with", "whoever", "whom", "from", "by", "as",
+            "not", "but", "or", "at", "them", "you", "we", "i", "me", "my",
+            "then", "there", "their", "have", "has", "had", "do", "does", "did"}
+    return {
+        w for w in re.findall(r"[a-zA-Z\u0600-\u06FF]{3,}", text.lower())
+        if w not in stop
+    }
+
+
+def _check_quote_identification(answer: str, pack: EvidencePack) -> list[dict]:
+    """Quote-identification guard (fixme_v3.1 §44 less-claim-more-transparency).
+
+    When the QUERY asks 'which surah/ayah is: "<quoted text>"' and the answer
+    asserts a Qur'an reference as the source of that quote, the quote's
+    content words must substantially appear in the cited verse (translation
+    or Arabic). A form-valid citation to a merely SIMILAR verse is a misquote
+    — 'Paradise without account' wording does not make 40:40 the source of
+    'whoever is patient in hardship ... surely grant him Paradise'.
+
+    Deterministic word overlap; no model in the loop. Only fires when the
+    query is an identification request carrying a quoted span.
+    """
+    query = pack.query or ""
+    if not _IDENTIFY_RE.search(query):
+        return []
+    quoted = [q.strip() for q in _QUOTED_SPAN_RE.findall(query) if len(q.strip()) >= 15]
+    if not quoted:
+        return []
+    # only Qur'an assertions are checked here (hadith text matching is the
+    # judge's job; this guard is for the verse-identification trap class)
+    # gather asserted quran refs from the answer in citation form
+    asserted = set()
+    for m in CITATION_RE.finditer(answer):
+        if m.group(1):
+            asserted.add(f"quran:{m.group(1)}:{m.group(2)}")
+        elif not any(m.group(g) for g in (5, 7, 10, 11, 13)):
+            asserted.add(f"quran:{m.group(3)}:{m.group(4)}")
+    if not asserted:
+        return []
+    pack_quran = {p.citation_id: p for p in pack.passages if p.citation_id.startswith("quran:")}
+    misquotes: list[dict] = []
+    for quote in quoted:
+        quote_words = _content_words(quote)
+        if len(quote_words) < 3:
+            continue
+        for citation in asserted:
+            passage = pack_quran.get(citation)
+            if passage is None:
+                continue  # unsupported citations are already handled
+            verse_words = _content_words(passage.translation or "") | _content_words(passage.arabic or "")
+            if not verse_words:
+                continue
+            overlap = quote_words & verse_words
+            # the quote must be substantially present in the verse it is
+            # claimed to come from: at least half its content words, and
+            # never fewer than 3
+            if len(overlap) < max(3, len(quote_words) // 2):
+                misquotes.append({
+                    "citation": citation,
+                    "claim": quote[:120],
+                    "overlap": sorted(overlap),
+                    "needed": sorted(quote_words),
+                })
+    return misquotes
 
 
 RESPONSE_SYSTEM_PROMPT = (

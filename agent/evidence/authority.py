@@ -81,6 +81,7 @@ SOURCE_AUTHORITY_BY_PREFIX: dict[str, AuthorityLevel] = {
     "hadith:": AuthorityLevel.SAHIH_HADITH,  # registry-approved collections only
     "tafsir:": AuthorityLevel.TAFSIR,
     "tafsir-en:": AuthorityLevel.TAFSIR,
+    "webfatwa:": AuthorityLevel.SCHOLARLY_SECONDARY,  # TIER 4 contemporary fatwa
 }
 
 #: registry-approved hadith collections (sahih/musanad class per registry)

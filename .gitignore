@@ -18,6 +18,11 @@ knowledge/processed/companion_logs/
 # Its derived chunks live in knowledge.db (also excluded).
 knowledge/tafsir/raw/classic_tafsir_en_chunks.db
 
+# Harvested web fatwa raw JSON (islamqa.info) — PRIVATE LOCAL STUDY ONLY (§21):
+# site content; redistribution not granted. Derived rows live in knowledge.db
+# (also excluded). Ingest via ingestion/web_fatwa_ingest.py.
+knowledge/web/raw/
+
 # Evaluation run artifacts (regenerable; contain corpus text excerpts)
 evaluation/results/
 

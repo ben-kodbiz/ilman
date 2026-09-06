@@ -81,8 +81,11 @@ FIRST_PERSON_RE = re.compile(
 )
 ISLAMIC_QUESTION_RE = re.compile(
     r"\b(islam|quran|qur'?an|hadith|sunnah|allah|prophet|muslim|muslims|fiqh|"
-    r"halal|haram|salat|solat|prayer|fasting|ramadan|zakah|tafsir|ayah|surah|"
-    r"verse|dua)\b",
+    r"halal|haram|salat|solat|prayer|prayers|fasting|ramadan|zakah|tafsir|ayah|"
+    r"surah|verse|verses|dua|wudu|ablution|ghusl|tayammum|masah|mosque|masjid|"
+    r"imam|sheikh|shaykh|scholar|scholars|fatwa|islamic|hijab|nikah|wali|"
+    r"qiblah|sujud|prostration|ruku|tawheed|tawhid|shirk|bida|bidah|sadaqah|"
+    r"aqiqah|qurban|udhiyah|istikharah|talaq|mahr)\b",
     re.IGNORECASE,
 )
 QUESTION_MARK_RE = re.compile(r"\?")

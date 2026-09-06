@@ -17,7 +17,7 @@ answer** — the system optimizes for never pretending weak evidence is strong.
 |---|---|
 | 0 — architecture, source policy, model abstraction | done |
 | 1 — model benchmark harness | done (Ling report + 4-model companion benchmark) |
-| 2 — knowledge core: Qur'an (hash-verified Uthmani), EN translation, Kutub al-Sittah hadiths (34,153, gradings preserved), Tafsir Kemenag (6236/ayah, + ID translation), classic EN tafsirs (Sa'di/Ibn Kathir/Qurtubi, 18,940 chunks, 164 quarantined) | done |
+| 2 — knowledge core: Qur'an (hash-verified Uthmani), EN translation, Kutub al-Sittah hadiths (34,153, gradings preserved), Tafsir Kemenag (6236/ayah, + ID translation), classic EN tafsirs (Sa'di/Ibn Kathir/Qurtubi, 18,940 chunks, 164 quarantined), IslamQA.info EN fatwas (TIER 4 contemporary, islamqa-info-en) | done |
 | 3 — hybrid retrieval: reference + Arabic/EN-ID translation/hadith/tafsir FTS + vector leg (65,565 nomic embeddings), RRF fusion, tier balancing, concept anchors, mandatory source filter | done |
 | 4 — Agent: intent router, memory (§15), tool-calling loop, query planner, evidence quarantine, repair rounds | done |
 | 5 — grounded regression (87% / 7% hallucination), companion eval (100.0 score), v3.1 validation metrics (0.00% false-support) | done |
@@ -111,6 +111,7 @@ uv run python -c "from ingestion.quran_ingest import QuranIngestor; QuranIngesto
 uv run python -c "from ingestion.hadith_ingest import HadithIngestor; HadithIngestor().ingest_all()"
 uv run python -c "from ingestion.tafsir_ingest import TafsirIngestor; TafsirIngestor().ingest()"
 uv run python -c "from ingestion.tafsir_en_ingest import TafsirEnIngestor; TafsirEnIngestor().ingest_all()"
+uv run python -c "from ingestion.web_fatwa_ingest import WebFatwaIngestor; WebFatwaIngestor().ingest()"  # after scripts/harvest_islamqa.py
 uv run python -c "from retrieval.vector_store import VectorStore; VectorStore().build()"   # ~12 min, one-time
 
 # --- run ---
