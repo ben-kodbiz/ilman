@@ -53,6 +53,17 @@ CONCEPT_ANCHORS: list[tuple[re.Pattern, list[str]]] = [
     # ayat al-kursi meta
     (re.compile(r"throne\s+verse|ayat\s*al.?kursi|ayatul\s+kursi", re.I),
      ["quran:2:255"]),
+    # beginner / learning-path guidance: the hadith of Jibril (the complete
+    # framework of the religion — Islam/Iman/Ihsan) + the five pillars;
+    # a beginner needs the map, not random lexical matches
+    (re.compile(
+        r"\b(learn|learning|study|begin|beginner|start|new)\b.*\b(islam|muslim|deen|faith|religion)\b"
+        r"|\b(islam|deen|religion)\b.*\b(learn|study|begin|beginner|new\s+to)\b"
+        r"|\b(how\s+do\s+i\s+start|where\s+do\s+i\s+start)\b",
+        re.I),
+     ["hadith:sunan-ibn-majah:63", "hadith:sahih-muslim:112",
+      "hadith:sahih-muslim:113", "hadith:sahih-muslim:114",
+      "hadith:sahih-muslim:115", "hadith:sahih-muslim:116"]),
 ]
 CONCEPT_QUERIES: list[tuple[re.Pattern, list[str]]] = [
     (re.compile(r"pillar[s]?\s+of\s+islam|arkan\s+al\s+islam|five\s+pillar", re.I),
@@ -66,6 +77,16 @@ CONCEPT_QUERIES: list[tuple[re.Pattern, list[str]]] = [
      ["belief in Allah His angels His books His messengers the Last Day"]),
     (re.compile(r"conditions\s+of\s+(the\s+)?shahadah|how\s+to\s+become\s+a\s+muslim", re.I),
      ["testimony there is no god but Allah Muhammad is the Messenger"]),
+    # learning-path guidance: retrieval expansions aimed at study-guidance
+    # material (the hadith of Jibril, degrees of the deen, seeking knowledge)
+    (re.compile(
+        r"\b(learn|learning|study|begin|beginner|start|new)\b.*\b(islam|muslim|deen|faith|religion)\b"
+        r"|\b(islam|deen|religion)\b.*\b(learn|study|begin|beginner|new\s+to)\b"
+        r"|\b(how\s+do\s+i\s+start|where\s+do\s+i\s+start)\b",
+        re.I),
+     ["what is Islam iman ihsan the hadith of Jibril",
+      "Islam is built upon five pillars",
+      "degrees of Islam seeking knowledge path"]),
 ]
 
 TOPIC_PATTERNS = [

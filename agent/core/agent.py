@@ -95,7 +95,10 @@ class AgentOrchestrator:
         self.conversation = conversation or ConversationMemory()
         self.validator = CitationValidator()
 
-    def answer(self, query: str, limit: int = 6, max_tokens: int = 4096) -> AgentResult:
+    # Ling-family reasoning shares the output budget; long evidence blocks
+    # make its internal reasoning exceed 4096 tokens and the answer comes
+    # back EMPTY (finish=length). 8192 covers evidence-heavy RAG turns.
+    def answer(self, query: str, limit: int = 6, max_tokens: int = 8192) -> AgentResult:
         intent: IntentResult = classify(query)
         trace = AgentTrace(intent=intent.intent, task_class=intent.routed_task_class)
 
@@ -176,10 +179,29 @@ class AgentOrchestrator:
                 messages.extend(tool_result_messages)
                 continue
             final_text = resp.content
+            if final_text.strip():
+                break
+            # Ling-family reasoning can consume the ENTIRE output budget
+            # (finish=length, all reasoning tokens) leaving empty content.
+            # ONE doubled-budget retry, fresh request (AGENTS.md Ling note);
+            # if still empty the honest §12 notice answers — never guess.
+            resp = self.router.chat(
+                intent.routed_task_class, messages,
+                tools=TOOL_SCHEMAS, max_tokens=max_tokens * 2,
+            )
+            trace.notes.append("empty output: retried with doubled budget")
+            final_text = resp.content
+            if resp.tool_calls:
+                tool_result_messages = self._handle_tool_calls(resp, trace, pack, passages)
+                messages.append(ChatMessage(role="assistant", content=resp.content or "",
+                                            tool_calls=self._raw_tool_calls(resp)))
+                messages.extend(tool_result_messages)
+                continue
             break
 
         if not final_text.strip():
             final_text = UNVERIFIABLE_NOTICE
+            trace.notes.append("QA empty after retry: honest notice")
 
         # 4. Deterministic citation validation + one repair round (§12).
         # Repair runs in a FRESH context: after tool rounds the conversation
@@ -279,6 +301,7 @@ class AgentOrchestrator:
                     {"ok": result.ok, "data": result.data, "error": result.error},
                     ensure_ascii=False,
                 )[:4000],
+                tool_call_id=tc.id,
             ))
             if result.ok and result.data:
                 self._merge_tool_evidence(tc.name, result.data, pack, passages)
@@ -341,12 +364,13 @@ class AgentOrchestrator:
 
     @staticmethod
     def _raw_tool_calls(resp: ModelResponse) -> list[dict]:
-        """Re-serialize tool calls for the next round's messages."""
+        """Re-serialize tool calls for the next round's messages, keeping the
+        BACKEND's ids so tool results pair correctly with their calls."""
         out = []
-        for tc in resp.tool_calls:
+        for i, tc in enumerate(resp.tool_calls):
             out.append({
                 "type": "function",
-                "id": f"call_{len(out)}",
+                "id": tc.id or f"call_{i}",
                 "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
             })
         return out
