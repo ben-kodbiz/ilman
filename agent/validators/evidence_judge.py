@@ -134,7 +134,7 @@ _DISTRESS_WORDS = {
 def _normalize_citation(marker: str) -> str:
     """[quran:2:255] / quran:2:255 / [sahih-bukhari:1] -> canonical id."""
     inner = marker.strip("[]()").lower()
-    if inner.startswith(("quran:", "hadith:", "tafsir:", "tafsir-en:")):
+    if inner.startswith(("quran:", "hadith:", "tafsir:", "tafsir-en:", "webfatwa:")):
         return inner
     parts = inner.split(":")
     if len(parts) == 2 and parts[1].isdigit():

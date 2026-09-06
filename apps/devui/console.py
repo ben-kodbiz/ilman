@@ -44,6 +44,7 @@ from ingestion.hadith_ingest import HadithStore  # noqa: E402
 from ingestion.quran_ingest import QuranStore  # noqa: E402
 from ingestion.tafsir_en_ingest import TafsirEnStore  # noqa: E402
 from ingestion.tafsir_ingest import TafsirStore  # noqa: E402
+from ingestion.web_fatwa_ingest import WebFatwaStore  # noqa: E402
 from retrieval.hybrid import RetrievalOrchestrator  # noqa: E402
 
 try:
@@ -59,6 +60,7 @@ STORE = QuranStore()
 HADITH = HadithStore()
 TAFSIR = TafsirStore()
 TAFSIR_EN = TafsirEnStore()
+WEB_FATWAS = WebFatwaStore()
 POLICY = SourcePolicy(SourceRegistry.load())
 MEMORY = MemoryRouter(CompanionMemory(db_path=REPO_ROOT / "knowledge" / "processed" / "devui_memory.db"))
 STATES = StateManager()
@@ -74,7 +76,7 @@ if VectorStore is not None:
 
 RETRIEVAL = RetrievalOrchestrator(
     STORE, hadith_store=HADITH, tafsir_store=TAFSIR,
-    tafsir_en_store=TAFSIR_EN, vector_store=VECTOR,
+    tafsir_en_store=TAFSIR_EN, web_fatwa_store=WEB_FATWAS, vector_store=VECTOR,
 )
 TOOLS = ToolLayer(POLICY, store=STORE, hadith_store=HADITH, memory=MEMORY.memory)
 AGENT: AgentOrchestrator | None = None

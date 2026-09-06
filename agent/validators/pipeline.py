@@ -25,8 +25,9 @@ CITATION_RE = re.compile(
     r"|\bhadith:([a-z0-9\-]+):(\d+)\b"
     r"|\btafsir:([a-z0-9\-]+):(\d{1,3}):(\d{1,3})\b"
     r"|\btafsir-en:([a-z0-9_\-]+)\b"
+    r"|\bwebfatwa:([a-z0-9\-]+):([a-z0-9\-]+)\b"
     # bare bracketed collection:number form the models often emit;
-    # ONLY accepted when it resolves to a pack citation (groups 11/12)
+    # ONLY accepted when it resolves to a pack citation (groups 13/14)
     r"|\[([a-z0-9\-]+):(\d+)\](?![\w:])"
 )
 
@@ -71,6 +72,16 @@ class EvidencePack:
                 lines.append(
                     f"[{p.citation_id}] ({label}{scholar if not p.scholar else ''}; "
                     "interpretation, TIER 2 — present as tafsir, never as Qur'an text)\n"
+                    f"{_trim(p.translation)}"
+                )
+            elif p.citation_id.startswith("webfatwa:"):
+                # TIER 4 contemporary fatwa — scholarly opinion, present as
+                # such, never as Qur'an/hadith text or infallible ruling
+                lines.append(
+                    f"[{p.citation_id}] (Fatwa by {p.scholar or 'Sheikh al-Munajjid'}, "
+                    "islamqa.info; contemporary scholarly opinion, TIER 4 — "
+                    "present as a fatwa/ruling opinion, subordinate to "
+                    "Qur'an and hadith; never quote as revelation)\n"
                     f"{_trim(p.translation)}"
                 )
             else:
@@ -334,9 +345,17 @@ class CitationValidator:
                 elif citation not in unsupported:
                     unsupported.append(citation)
                 continue
-            elif m.group(11):  # bare [collection:number] bracket form:
+            elif m.group(11):  # webfatwa:source:answer_id form
+                citation = f"webfatwa:{m.group(11)}:{m.group(12)}"
+                if citation in allowed:
+                    if citation not in verified:
+                        verified.append(citation)
+                elif citation not in unsupported:
+                    unsupported.append(citation)
+                continue
+            elif m.group(13):  # bare [collection:number] bracket form:
                 # accepted ONLY when it resolves to a pack hadith citation
-                bare = f"hadith:{m.group(11)}:{m.group(12)}"
+                bare = f"hadith:{m.group(13)}:{m.group(14)}"
                 if bare in allowed:
                     if bare not in verified:
                         verified.append(bare)

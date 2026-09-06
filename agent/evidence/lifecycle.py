@@ -178,4 +178,6 @@ def _source_type_of(citation_id: str) -> str:
         return "tafsir"
     if citation_id.startswith("tafsir:"):
         return "tafsir"
+    if citation_id.startswith("webfatwa:"):
+        return "contemporary_fatwa"
     return "external_untrusted"
