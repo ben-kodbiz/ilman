@@ -23,7 +23,7 @@ from pathlib import Path
 
 import requests
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "knowledge" / "web" / "raw" / "islamqa_en"
 INDEX_PATH = OUT_DIR / "index.json"
 

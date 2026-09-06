@@ -107,7 +107,7 @@ class VectorStore:
                 parts.append("(SELECT COUNT(*) FROM web_fatwas)")
             if not parts:
                 return 0
-            return con.execute(" + ".join(parts)).fetchone()[0]
+            return con.execute("SELECT " + " + ".join(parts)).fetchone()[0]
         finally:
             if own:
                 con.close()
